@@ -1,7 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.20"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.21"
     id("jacoco")
     id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
 }
@@ -296,22 +296,22 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.2.1")
     implementation("com.google.android.gms:play-services-auth:22.0.0")
     implementation("com.google.http-client:google-http-client-gson:2.2.0")
-    implementation("com.google.api-client:google-api-client-android:2.9.1")
+    implementation("com.google.api-client:google-api-client-android:2.9.2")
     implementation("com.google.apis:google-api-services-drive:v3-rev20240123-2.0.0")
 
     // WorkManager for background tasks
     implementation("androidx.work:work-runtime-ktx:2.12.0")
 
     // Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.13.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.mockito:mockito-core:5.24.0")
     testImplementation("org.mockito.kotlin:mockito-kotlin:6.4.0")
     testImplementation("androidx.work:work-testing:2.12.0")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
-    testImplementation("org.robolectric:robolectric:4.17")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.12.0")
+    testImplementation("org.robolectric:robolectric:4.18")
     testImplementation("androidx.compose.ui:ui-test-junit4")
     testImplementation("androidx.activity:activity-compose:1.13.0")
     testImplementation("androidx.test.ext:junit:1.3.0")
