@@ -451,6 +451,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | `RECEIVE_BOOT_COMPLETED` | Reschedule after reboot |
 | `health.READ_*` | Health Connect data types (20 types) |
 | `health.READ_HEALTH_DATA_IN_BACKGROUND` | Reading Health Connect from the scheduled workers on Android 14+ (requested with the other health permissions) |
+| `POST_NOTIFICATIONS` | Delivery-failure alert (requested when an automatic delivery path is enabled, Android 13+) |
 
 ---
 

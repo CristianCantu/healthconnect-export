@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`READ_HEALTH_DATA_IN_BACKGROUND`:** the app now declares and requests Health Connect's background read permission — Android 14+ rejects every read made from a scheduled worker without it. It is requested together with the per-type permissions, whenever a background delivery path is switched on, and at launch while automatic delivery is enabled (existing installs never saw a Health Connect dialog again)
-- **`DeliveryAlertNotifier`:** one user-visible notification per delivery outage ("Delivery problems" channel), dismissed by the next successful send, so a broken pipeline is no longer silent
+- **`DeliveryAlertNotifier`:** one user-visible notification per delivery outage ("Delivery problems" channel), dismissed by the next successful send, so a broken pipeline is no longer silent. `POST_NOTIFICATIONS` is declared and requested as soon as an automatic delivery path is enabled (Android 13+), so the alert can actually be shown
 - **`DeliveryOutcome`:** shared retry/notify policy for the delivery workers
 - **`DailyHealthRecord.hasAnyData()`:** a day counts as delivered only when it carries at least one record
 - **Tests:** background-permission handling (granted/missing), 4xx without retry, empty-day filtering, `WebhookResult.Error.isRetryable`, `ExportSettings.hasStoredWebhookUrl`, full `DeliveryLog.clear()`, permission string ↔ manifest check — 397 → 426 tests

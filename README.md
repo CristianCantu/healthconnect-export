@@ -435,6 +435,7 @@ Create a PR on GitHub with your translation files. After merging:
 | `health.READ_*` | Health Connect data types (20 types) |
 | `health.READ_HEALTH_DATA_IN_BACKGROUND` | Reading Health Connect from the scheduled workers on Android 14+ |
 | `FOREGROUND_SERVICE_DATA_SYNC` | Best-effort foreground service while a worker reads |
+| `POST_NOTIFICATIONS` | Delivery-failure notification (requested when automatic delivery is enabled, Android 13+) |
 
 ## Tech stack
 

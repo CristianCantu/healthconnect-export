@@ -435,6 +435,7 @@ cp README.md README.fr.md
 | `health.READ_*` | Типы данных Health Connect (20 типов) |
 | `health.READ_HEALTH_DATA_IN_BACKGROUND` | Фоновое чтение Health Connect в задачах по расписанию (Android 14+) |
 | `FOREGROUND_SERVICE_DATA_SYNC` | Best-effort foreground-сервис, пока воркер читает данные |
+| `POST_NOTIFICATIONS` | Уведомление об ошибке доставки (запрашивается при включении автодоставки, Android 13+) |
 
 ## Технологический стек
 

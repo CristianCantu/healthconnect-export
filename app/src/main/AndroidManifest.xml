@@ -47,6 +47,13 @@
     <!-- Foreground service for scheduled work -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!--
+      Delivery alerts are ordinary notifications, so Android 13+ requires this
+      runtime permission before they can be posted. Requested from the UI when an
+      automatic delivery path is enabled; without it the alert is skipped and the
+      failure only shows up in the Schedule tab.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
       Foreground-service promotion is a best-effort fallback only: Android 12+
       forbids starting a foreground service from the background unless the app is
       visible or exempt from battery optimization, which is exactly the situation a

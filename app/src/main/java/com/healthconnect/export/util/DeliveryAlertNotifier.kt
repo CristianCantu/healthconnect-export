@@ -1,10 +1,14 @@
 package com.healthconnect.export.util
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.healthconnect.export.R
 
 /**
@@ -35,6 +39,13 @@ object DeliveryAlertNotifier {
         detail: String,
     ) {
         try {
+            // Android 13+ silently drops notifications without the runtime
+            // permission; returning before markShown keeps the alert pending for
+            // the first failure after the user grants it.
+            if (!canPostNotifications(context)) {
+                Log.i(TAG, "notification permission missing — delivery alert skipped")
+                return
+            }
             val manager = notificationManager(context) ?: return
             if (!markShown(context)) return
 
@@ -71,6 +82,11 @@ object DeliveryAlertNotifier {
                 .apply()
         }
     }
+
+    /** True when posting notifications is allowed on this device/OS version. */
+    private fun canPostNotifications(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     /** True when this call posted the alert, i.e. no alert was pending yet. */
     private fun markShown(context: Context): Boolean {
