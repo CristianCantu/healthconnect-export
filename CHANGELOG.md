@@ -11,6 +11,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11] — 2026-11-18
+
+### Added
+- **`READ_HEALTH_DATA_IN_BACKGROUND`:** the app now declares and requests Health Connect's background read permission — Android 14+ rejects every read made from a scheduled worker without it. It is requested together with the per-type permissions, whenever a background delivery path is switched on, and at launch while automatic delivery is enabled (existing installs never saw a Health Connect dialog again)
+- **`DeliveryAlertNotifier`:** one user-visible notification per delivery outage ("Delivery problems" channel), dismissed by the next successful send, so a broken pipeline is no longer silent
+- **`DeliveryOutcome`:** shared retry/notify policy for the delivery workers
+- **`DailyHealthRecord.hasAnyData()`:** a day counts as delivered only when it carries at least one record
+- **Tests:** background-permission handling (granted/missing), 4xx without retry, empty-day filtering, `WebhookResult.Error.isRetryable`, `ExportSettings.hasStoredWebhookUrl`, full `DeliveryLog.clear()`, permission string ↔ manifest check — 397 → 426 tests
+
+### Changed
+- **Foreground-service promotion is best effort:** Android 12+ forbids starting an FGS from the background, so `ExportForegroundNotifier.promoteToForeground()` reports its outcome and no worker depends on it any more
+- **Retry policy:** HTTP 4xx answers are no longer retried (only network errors, 408/429 and 5xx); a `SecurityException` retries only while the background permission is actually granted
+- **Catch-up:** also runs when nothing was ever delivered, requires an enabled automatic delivery path, and the watchdog alarm now fills only a real gap instead of queueing a run every six hours
+- **Worker configuration:** a saved (even empty) webhook URL wins over the snapshot stored in the work request
+- **Toolchain:** AGP 9.4.1 → 9.5.1, Gradle 9.8.0 → 9.9.1, Kotlin 2.4.21, WorkManager 2.12.0, kotlinx-serialization-json 1.13.0, Robolectric 4.18, Mockito 5.24.0, mockito-kotlin 6.4.0
+
+### Fixed
+- **Scheduled delivery was dead in the background:** Health Connect rejected every background read with `SecurityException`, the foreground-service workaround could not start (`mAllowStartForeground false`), and the workers retried forever with exponential backoff without delivering anything — the cause of the multi-day gaps between deliveries
+- **Empty days advanced the resume point:** days pre-seeded by the batch reader without a single record were counted as delivered, so the catch-up believed it was up to date
+- **`DeliveryLog.clear()`** left the last attempt/success timestamps and the resume point behind
+- **Build:** the Dependabot bump of `kotlinx-coroutines-test` to 1.12.0 is not published in any configured repository and broke the build; pinned back to 1.11.0
+
+---
+
 ## [1.10] — 2026-09-27
 
 ### Added
@@ -246,7 +270,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[1.10]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.10
+[1.11]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.11
 [1.10]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.10
 [1.9]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.9
 [1.8]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.8

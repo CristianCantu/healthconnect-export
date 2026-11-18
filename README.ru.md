@@ -5,7 +5,7 @@
 [![Branches](https://raw.githubusercontent.com/kas-cor/healthconnect-export/main/badges/branches.svg)](https://github.com/kas-cor/healthconnect-export/actions/workflows/build-apk.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Kotlin](https://img.shields.io/badge/kotlin-2.4.20-purple)](https://kotlinlang.org)
-[![Версия](https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.10-blue)](CHANGELOG.md)
+[![Версия](https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.11-blue)](CHANGELOG.md)
 [![Release](https://img.shields.io/github/v/release/kas-cor/healthconnect-export)](https://github.com/kas-cor/healthconnect-export/releases)
 [![English](https://img.shields.io/badge/README-English-blue)](README.md)
 
@@ -22,7 +22,7 @@ Android-приложение для экспорта данных Google Health 
 - **Webhook доставка** — POST JSON по URL (с опциональным Bearer-токеном, повтор при ошибке)
 - **Тест вебхука** — проверка соединения с данными за сегодня прямо из UI
 - **Webhook каждые 2 часа** — отправка данных за сегодня на webhook каждые 2 часа (без Drive)
-- **Надёжная фоновая выгрузка** — ресивер загрузки, будильник-watchdog, работающий в Doze, и автоматическая догоняющая выгрузка пропущенных дней (запускается сразу при открытии приложения, иначе — по будильнику watchdog); журнал выгрузок во вкладке «Расписание»
+- **Надёжная фоновая выгрузка** — разрешение Health Connect на фоновое чтение (обязательно на Android 14+), ресивер загрузки, будильник-watchdog, работающий в Doze, автоматическая догоняющая выгрузка пропущенных дней (сразу при открытии приложения, иначе — по будильнику watchdog), журнал выгрузок во вкладке «Расписание» и уведомление, если доставка сломалась
 - **20 типов данных** — шаги, пульс, сон, калории, тренировки, питание, скорость и другие
 - **Выбор периода** — последние 7/30 дней или произвольный диапазон с календарём
 - **Выбор источника данных** — предпочитаемый источник (Google Fit, Samsung Health и т.д.)
@@ -203,8 +203,8 @@ Push → Lint + Ktlint → Модульные тесты
 ### Релиз
 
 ```bash
-git tag v1.10
-git push origin v1.10
+git tag v1.11
+git push origin v1.11
 # CI: увеличить версию → собрать → создать GitHub Release
 ```
 
@@ -304,15 +304,17 @@ apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
 - Использует WorkManager `PeriodicWorkRequest` **без** ограничения battery-not-low (экспорт дешёвый, а проверка заряда молча блокировала выгрузку)
 - **Watchdog:** неточный будильник, которому разрешено срабатывать в Doze (`setAndAllowWhileIdle`), заново ставит периодические задачи и запускает разовую догоняющую выгрузку
 - **После перезагрузки / обновления приложения:** `DeliveryBootReceiver` восстанавливает расписание из сохранённых настроек (разрешение `RECEIVE_BOOT_COMPLETED` было объявлено, но не использовалось)
-- **Догоняющая выгрузка:** `CatchUpWebhookWorker` продолжает с последнего фактически доставленного дня и отправляет всё после него одним запросом (не больше 30 дней)
-- **Диагностика:** во вкладке «Расписание» видны время последней попытки, последней успешной выгрузки и журнал; неудачная попытка никогда не возвращает `failure`, потому что WorkManager после этого окончательно убивает периодическую задачу
+- **Догоняющая выгрузка:** `CatchUpWebhookWorker` продолжает с последнего фактически доставленного дня и отправляет всё после него одним запросом (не больше 30 дней); заполняет и самый первый пропуск, если доставок ещё не было
+- **Разрешение на фоновое чтение:** `android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND` объявлено и запрашивается вместе с типовыми разрешениями; без него Android 14+ отклоняет любое чтение из фонового воркера
+- **Политика повторов:** временные проблемы (сеть, 5xx, 408/429) повторяются, постоянные (нет фонового разрешения, HTTP 4xx) завершают запуск до следующего периода; ни один запуск не возвращает `failure`, потому что WorkManager после этого окончательно убивает периодическую задачу
+- **Диагностика:** во вкладке «Расписание» видны время последней попытки, последней успешной выгрузки и журнал; первая ошибка за инцидент дополнительно показывается уведомлением, которое снимается первым успехом
 - **Освобождение от оптимизации батареи:** вкладка «Расписание» предлагает опциональное исключение из Doze и показывает его текущее состояние
 
 ## Локализация 🌐
 
 - **Языки**: английский (по умолчанию), русский
 - **Переключение языка**: через вкладку «Настройки» → «Язык»
-- **Покрытие**: Все **211 строк** переведены в `values-ru/strings.xml`
+- **Покрытие**: Все **220 строк** переведены в `values-ru/strings.xml`
 - **Безопасность форматов**: все плейсхолдеры `%d`, `%s`, `%.1f` совпадают между языками
 - **Сохранение**: выбранный язык сохраняется в SharedPreferences
 
@@ -334,7 +336,7 @@ apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
 ### Технические детали
 
 - Файл перевода: `app/src/main/res/values-ru/strings.xml`
-- Все **211 строк** переведены — ни одной пропущенной английской строки
+- Все **220 строк** переведены — ни одной пропущенной английской строки
 - Форматные плейсхолдеры (`%d`, `%s`, `%.1f`) полностью совпадают с английской версией — никаких crash'ей при переключении языка
 - Выбор языка сохраняется в `SharedPreferences` и восстанавливается после перезапуска
 - На здоровье не влияет — JSON-данные экспортируются с английскими ключами независимо от языка интерфейса
@@ -431,23 +433,25 @@ cp README.md README.fr.md
 | `RECEIVE_BOOT_COMPLETED` | Перезапуск после перезагрузки |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Опциональное исключение из Doze (предлагается во вкладке «Расписание») |
 | `health.READ_*` | Типы данных Health Connect (20 типов) |
+| `health.READ_HEALTH_DATA_IN_BACKGROUND` | Фоновое чтение Health Connect в задачах по расписанию (Android 14+) |
+| `FOREGROUND_SERVICE_DATA_SYNC` | Best-effort foreground-сервис, пока воркер читает данные |
 
 ## Технологический стек
 
 | Компонент | Версия |
 |---|---|
-| Язык | Kotlin 2.4.20 |
+| Язык | Kotlin 2.4.21 |
 | UI | Jetpack Compose + Material3 (BOM 2026.09.00) |
-| Сборка | AGP 9.4.0 / Gradle 9.7.1 |
+| Сборка | AGP 9.5.1 / Gradle 9.9.1 |
 | Health Connect | `connect-client:1.1.0` |
-| Google Drive | `google-api-services-drive:v3-rev20240123-2.0.0`, `google-api-client-android:2.9.1`, `google-http-client-gson:2.2.0` |
+| Google Drive | `google-api-services-drive:v3-rev20240123-2.0.0`, `google-api-client-android:2.9.2`, `google-http-client-gson:2.2.0` |
 | Авторизация | `play-services-auth:22.0.0`, `androidx.credentials:1.6.0`, `googleid:1.2.1` |
-| Фон | WorkManager `work-runtime-ktx:2.11.2` |
-| Сериализация | `kotlinx-serialization-json:1.11.0` |
+| Фон | WorkManager `work-runtime-ktx:2.12.0` |
+| Сериализация | `kotlinx-serialization-json:1.13.0` |
 | minSdk / targetSdk / compileSdk | 28 / 37 / 37 |
 | JVM | 21 |
 | Линтинг | ktlint 14.2.0 |
-| Тестирование | JUnit 4.13.2, Mockito 5.23.0, mockito-kotlin 6.3.0, Robolectric 4.17 |
+| Тестирование | JUnit 4.13.2, Mockito 5.24.0, mockito-kotlin 6.4.0, Robolectric 4.18 |
 | Покрытие | JaCoCo 0.8.12 |
 | CI | GitHub Actions |
 
@@ -457,8 +461,10 @@ cp README.md README.fr.md
 
 | Версия | Дата | Что нового |
 |---|---|---|
+| [v1.11](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.11) | 2026-11-18 | Выгрузка по расписанию действительно починена: разрешение Health Connect на фоновое чтение, уведомление об ошибках, без повторов на 4xx, пустые дни больше не сдвигают точку догона, 426 тестов |
 | [v1.10](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.10) | 2026-09-27 | Вход в Google через Credential Manager, ленивый запрос Drive-скоупа, догон недоставленных дней при открытии приложения, 397 тестов |
-| [v1.9](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.9) | 2026-09-25 | Фоновая выгрузка переживает перезагрузки, Doze и агрессивную экономию батареи: будильник-watchdog, ресивер загрузки, догоняющая выгрузка пропущенных дней, журнал || [v1.8](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.8) | 2026-08-10 | Действия с файлами в Истории (поделиться/удалить), экспорт JSON/CSV, автоочистка, час запуска расписания, 341 тест |
+| [v1.9](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.9) | 2026-09-25 | Фоновая выгрузка переживает перезагрузки, Doze и агрессивную экономию батареи: будильник-watchdog, ресивер загрузки, догоняющая выгрузка пропущенных дней, журнал |
+| [v1.8](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.8) | 2026-08-10 | Действия с файлами в Истории (поделиться/удалить), экспорт JSON/CSV, автоочистка, час запуска расписания, 341 тест |
 | [v1.7](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.7) | 2026-08-10 | Проверка обновлений + диалог «Что нового», навигация по вкладкам, автовход в Google Drive, улучшения Истории |
 | [v1.6](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.6) | 2026-07-17 | Build-скрипт (`build.sh`), русский README (`README.ru.md`), проверка синхронизации README |
 | [v1.5](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.5) | 2026-06-08 | Webhook-воркер каждые 2 часа, кнопка теста webhook, сортировка файлов по убыванию, обновление зависимостей (Kotlin 2.3.21, Gradle 9.5.1) |

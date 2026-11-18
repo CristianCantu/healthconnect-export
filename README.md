@@ -5,7 +5,7 @@
 [![Branches](https://raw.githubusercontent.com/kas-cor/healthconnect-export/main/badges/branches.svg)](https://github.com/kas-cor/healthconnect-export/actions/workflows/build-apk.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Kotlin](https://img.shields.io/badge/kotlin-2.4.20-purple)](https://kotlinlang.org)
-[![Version](https://img.shields.io/badge/version-1.10-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.11-blue)](CHANGELOG.md)
 [![Release](https://img.shields.io/github/v/release/kas-cor/healthconnect-export)](https://github.com/kas-cor/healthconnect-export/releases)
 [![Русский](https://img.shields.io/badge/README-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-blue)](README.ru.md)
 
@@ -22,7 +22,7 @@ Android app for exporting Google Health Connect data to JSON format with optiona
 - **Webhook delivery** — POST JSON to a URL (with optional Bearer auth, retry on failure)
 - **Webhook test** — test connectivity with today's data directly from UI
 - **Every-2-hours webhook** — send current day's data to webhook every 2 hours (no Drive sync)
-- **Reliable background delivery** — boot receiver, a Doze-proof watchdog alarm and an automatic catch-up of days missed while the app was idle (filled immediately when the app is opened, otherwise by the watchdog alarm), with a delivery log in the Schedule tab
+- **Reliable background delivery** — Health Connect background-read permission (required on Android 14+), boot receiver, a Doze-proof watchdog alarm and an automatic catch-up of days missed while the app was idle (filled immediately when the app is opened, otherwise by the watchdog alarm), a delivery log in the Schedule tab and a notification when delivery breaks
 - **20 data types** — steps, heart rate, sleep, calories, exercise, nutrition, speed, and more
 - **Date range selection** — last 7/30 days or custom range with date picker
 - **Data source selection** — pick preferred health data source (Google Fit, Samsung Health, etc.)
@@ -203,8 +203,8 @@ On push to `main`, a coverage badge is auto-committed to `badges/`.
 ### Release
 
 ```bash
-git tag v1.10
-git push origin v1.10
+git tag v1.11
+git push origin v1.11
 # CI: bump version → build → create GitHub Release
 ```
 
@@ -304,48 +304,46 @@ Each element in the `messages` array is a `DailyHealthRecord` — one per export
 - Uses WorkManager `PeriodicWorkRequest` **without** a battery constraint (exports are cheap; the low-battery gate silently blocked them)
 - **Watchdog:** an inexact alarm that is allowed to fire during Doze (`setAndAllowWhileIdle`) re-enqueues the periodic jobs and queues a one-shot catch-up
 - **After reboot / app update:** `DeliveryBootReceiver` re-enqueues the schedule from the saved settings (the `RECEIVE_BOOT_COMPLETED` permission was declared but never used before)
-- **Catch-up:** `CatchUpWebhookWorker` resumes from the newest day that was actually delivered and sends everything after it in one payload (at most 30 days)
-- **Diagnostics:** the Schedule tab shows the last attempt / last success and a delivery log; a failed attempt never reports `failure`, because WorkManager terminates a failed periodic job permanently
+- **Catch-up:** `CatchUpWebhookWorker` resumes from the newest day that was actually delivered and sends everything after it in one payload (at most 30 days); it also fills the very first gap when nothing was ever delivered
+- **Background read permission:** `android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND` is declared and requested together with the per-type permissions; without it Android 14+ rejects every read from a scheduled worker
+- **Retry policy:** transient problems (network, 5xx, 408/429) retry, permanent ones (missing background permission, HTTP 4xx) finish the run and wait for the next period; a run never reports `failure`, because WorkManager terminates a failed periodic job permanently
+- **Diagnostics:** the Schedule tab shows the last attempt / last success and a delivery log, and the first failure of an outage also posts a notification that the next success dismisses
 - **Battery exemption:** the Schedule tab offers the optional Doze exemption and shows whether it is granted
 
 ## Localization 🌐
 
 - **Languages**: English (default), Russian
 - **Locale switching**: Via Settings tab → Language
-- **Coverage**: All 211 strings translated in `values-ru/strings.xml`
+- **Coverage**: All 220 strings translated in `values-ru/strings.xml`
 - **Format safety**: All `%d`, `%s`, `%.1f` placeholders match between locales
 - **Persistence**: Selected locale saved in SharedPreferences
 
-### Локализация 🇷🇺
+### How to switch the language 🇷🇺
 
-Приложение полностью переведено на русский язык.
+1. Open the **Settings** tab (gear icon in the bottom bar) → **Language**
+2. Pick **Russian** (or **System** to follow the device language)
 
-**Как переключить язык:**
+### What is translated
 
-1. Откройте вкладку **Настройки** (шестерёнка в нижней панели) → раздел **Язык**
-2. Выберите **Русский** (или **Системный** для автоматического выбора языка устройства)
-
-**Что переведено:**
-
-Все строки интерфейса:
-- Названия типов данных (Шаги, Пульс, Сон, Калории, Дистанция и т.д.)
-- Интерфейс экспорта и расписания
-- Сообщения об ошибках и статусе
+Every UI string:
+- Data type names (Steps, Heart Rate, Sleep, Calories, Distance, …)
+- Export and schedule UI
+- Status and error messages
 - Google Drive, Webhook
-- JSON viewer, сводка экспорта
-- Все системные уведомления (WorkManager)
+- JSON viewer, export summary
+- All system notifications (WorkManager)
 
-**Технические детали:**
+### Technical details
 
-- Файл перевода: `app/src/main/res/values-ru/strings.xml`
-- Все **211 строк** переведены — ни одной пропущенной английской строки
-- Форматные плейсхолдеры (`%d`, `%s`, `%.1f`) полностью совпадают с английской версией — никаких crash'ей при переключении языка
-- Выбор языка сохраняется в `SharedPreferences` и восстанавливается после перезапуска
-- На здоровье не влияет — JSON-данные экспортируются с английскими ключами независимо от языка интерфейса
+- Translation file: `app/src/main/res/values-ru/strings.xml`
+- All **220 strings** translated — no English string is left in the Russian locale
+- Format placeholders (`%d`, `%s`, `%.1f`) match the English version exactly, so switching the language cannot crash the app
+- The choice is stored in `SharedPreferences` and restored after a restart
+- Health data is unaffected: the exported JSON uses English keys regardless of the UI language
 
-**Добавить или исправить перевод:**
+### Add or fix a translation
 
-Отредактируйте `app/src/main/res/values-ru/strings.xml` и запустите валидатор:
+Edit `app/src/main/res/values-ru/strings.xml` and run the validator:
 
 ```bash
 python3 scripts/locale-validator.py
@@ -435,23 +433,25 @@ Create a PR on GitHub with your translation files. After merging:
 | `RECEIVE_BOOT_COMPLETED` | Reschedule after reboot |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Optional Doze exemption, offered in the Schedule tab |
 | `health.READ_*` | Health Connect data types (20 types) |
+| `health.READ_HEALTH_DATA_IN_BACKGROUND` | Reading Health Connect from the scheduled workers on Android 14+ |
+| `FOREGROUND_SERVICE_DATA_SYNC` | Best-effort foreground service while a worker reads |
 
 ## Tech stack
 
 | Component | Version |
 |---|---|
-| Language | Kotlin 2.4.20 |
+| Language | Kotlin 2.4.21 |
 | UI | Jetpack Compose + Material3 (BOM 2026.09.00) |
-| Build | AGP 9.4.0 / Gradle 9.7.1 |
+| Build | AGP 9.5.1 / Gradle 9.9.1 |
 | Health Connect | `connect-client:1.1.0` |
-| Google Drive | `google-api-services-drive:v3-rev20240123-2.0.0`, `google-api-client-android:2.9.1`, `google-http-client-gson:2.2.0` |
+| Google Drive | `google-api-services-drive:v3-rev20240123-2.0.0`, `google-api-client-android:2.9.2`, `google-http-client-gson:2.2.0` |
 | Auth | `play-services-auth:22.0.0`, `androidx.credentials:1.6.0`, `googleid:1.2.1` |
-| Background | WorkManager `work-runtime-ktx:2.11.2` |
-| Serialization | `kotlinx-serialization-json:1.11.0` |
+| Background | WorkManager `work-runtime-ktx:2.12.0` |
+| Serialization | `kotlinx-serialization-json:1.13.0` |
 | minSdk / targetSdk / compileSdk | 28 / 37 / 37 |
 | JVM | 21 |
 | Linting | ktlint 14.2.0 |
-| Testing | JUnit 4.13.2, Mockito 5.23.0, mockito-kotlin 6.3.0, Robolectric 4.17 |
+| Testing | JUnit 4.13.2, Mockito 5.24.0, mockito-kotlin 6.4.0, Robolectric 4.18 |
 | Coverage | JaCoCo 0.8.12 |
 | CI | GitHub Actions |
 
@@ -461,6 +461,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 | Version | Date | Highlights |
 |---|---|---|
+| [v1.11](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.11) | 2026-11-18 | Scheduled delivery fixed for real: Health Connect background-read permission, failure notification, 4xx without retry, empty days no longer swallow the catch-up point, 426 tests |
 | [v1.10](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.10) | 2026-09-27 | Google Sign-In migrated to Credential Manager, Drive scope requested lazily, catch-up of undelivered days on app open, 397 tests |
 | [v1.9](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.9) | 2026-09-25 | Background delivery survives reboots, Doze and OEM battery savers: watchdog alarm, boot receiver, catch-up of missed days, delivery log |
 | [v1.8](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.8) | 2026-08-10 | File actions in History (share/delete), JSON/CSV export format, auto-cleanup retention, schedule hour, 341 tests |
