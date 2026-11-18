@@ -69,8 +69,7 @@ class WebhookRepository(
                     is WebhookResult.Success -> return@withContext lastResult
                     is WebhookResult.Error -> {
                         val error = lastResult as WebhookResult.Error
-                        // Retry only on network/timeout/server errors (status 0 = connection error, 5xx = server error)
-                        if (attempt < maxAttempts && (error.statusCode == 0 || error.statusCode in 500..599)) {
+                        if (attempt < maxAttempts && error.isRetryable) {
                             Log.w(TAG, "sendRecords attempt $attempt failed (${error.statusCode}), retrying...")
                             delay(1000)
                         } else {
@@ -159,5 +158,15 @@ sealed class WebhookResult {
     data class Error(
         val statusCode: Int,
         val message: String,
-    ) : WebhookResult()
+    ) : WebhookResult() {
+        /**
+         * True when another attempt can plausibly succeed.
+         *
+         * A 4xx (400/401/403/404) is a configuration problem: retrying it forever
+         * only drains the battery and spams the delivery log, so the background
+         * workers stop retrying it.
+         */
+        val isRetryable: Boolean
+            get() = statusCode == 0 || statusCode in 500..599 || statusCode == 408 || statusCode == 429
+    }
 }

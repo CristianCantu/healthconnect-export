@@ -195,6 +195,10 @@ class ExportViewModel(
         // Re-schedule the periodic export without popping a confirmation
         // snackbar at every app start.
         scheduleManager.scheduleExport(_uiState.value, showMessage = false)
+        // A configured background delivery cannot read anything without the
+        // background-read permission, so ask for it right away instead of letting
+        // the schedule run and fail silently.
+        warnIfBackgroundReadMissing(prompt = ExportSettings.isAutoDeliveryEnabled(ExportSettings.loadConfig(getApplication())))
         fetchAvailableSources()
     }
 
@@ -662,14 +666,37 @@ class ExportViewModel(
 
     fun setAutoSendWebhook(enabled: Boolean) {
         webhookManager.setAutoSendWebhook(enabled)
+        if (enabled) warnIfBackgroundReadMissing()
     }
 
     fun setAutoSendWebhookEvery2Hours(enabled: Boolean) {
         webhookManager.setAutoSendWebhookEvery2Hours(enabled)
+        if (enabled) warnIfBackgroundReadMissing()
     }
 
     fun scheduleExport() {
         scheduleManager.scheduleExport(_uiState.value)
+        warnIfBackgroundReadMissing()
+    }
+
+    /**
+     * Explains a silent failure of the scheduled delivery before it happens.
+     *
+     * Without `READ_HEALTH_DATA_IN_BACKGROUND` every background run is rejected by
+     * Health Connect on Android 14+, which is exactly the failure the user cannot
+     * see from the UI: the schedule looks healthy while nothing is delivered.
+     * Users who granted the per-type permissions before this permission existed
+     * never see a Health Connect dialog again, so it is requested here instead of
+     * waiting for a manual export to ask.
+     */
+    private fun warnIfBackgroundReadMissing(prompt: Boolean = true) {
+        viewModelScope.launch {
+            val allowed = runCatching { healthRepo.hasBackgroundReadPermission() }.getOrDefault(true)
+            if (!allowed) {
+                _uiState.update { it.copy(message = str(R.string.vm_background_read_missing)) }
+                if (prompt) pendingPermissions = setOf(HealthConnectRepository.BACKGROUND_READ_PERMISSION)
+            }
+        }
     }
 
     fun cancelSchedule() {

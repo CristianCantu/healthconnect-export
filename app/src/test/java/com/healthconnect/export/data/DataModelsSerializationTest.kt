@@ -30,6 +30,8 @@ class DataModelsSerializationTest {
             encodeDefaults = true
         }
 
+    private val metadata = ExportMetadata("1.0.0", "2026-09-22T12:00:00", "UTC")
+
     // =============================================
     // DailyHealthRecord serialization
     // =============================================
@@ -687,5 +689,51 @@ class DataModelsSerializationTest {
             val restored = json.decodeFromString<DateRangePreset>(jsonString)
             assertEquals(preset, restored)
         }
+    }
+
+    @Test
+    fun `hasAnyData ignores a pre-seeded day without records`() {
+        val emptyDay = DailyHealthRecord(date = "2026-09-22", metadata = metadata)
+
+        assertFalse(emptyDay.hasAnyData())
+    }
+
+    @Test
+    fun `hasAnyData is true for every kind of payload`() {
+        val variants =
+            listOf(
+                DailyHealthRecord(date = "d", steps = StepsData(1, 1), metadata = metadata),
+                DailyHealthRecord(date = "d", heartRate = HeartRateData(70.0, 60, 90, 3), metadata = metadata),
+                DailyHealthRecord(date = "d", weight = WeightData(80.0, 1), metadata = metadata),
+                DailyHealthRecord(date = "d", bloodPressure = BloodPressureData(120.0, 80.0, null, 1), metadata = metadata),
+                DailyHealthRecord(date = "d", hydration = HydrationData(1.5, 2), metadata = metadata),
+                DailyHealthRecord(date = "d", speed = SpeedData(1.2, 4), metadata = metadata),
+                DailyHealthRecord(date = "d", menstruation = MenstruationData("medium", "2026-09-22T08:00:00"), metadata = metadata),
+                DailyHealthRecord(
+                    date = "d",
+                    exercises = listOf(ExerciseData("RUNNING", "08:00", "09:00", 60)),
+                    metadata = metadata,
+                ),
+                DailyHealthRecord(
+                    date = "d",
+                    nutrition = listOf(NutritionData(name = "Oatmeal")),
+                    metadata = metadata,
+                ),
+            )
+
+        variants.forEach { assertTrue("expected data in $it", it.hasAnyData()) }
+    }
+
+    @Test
+    fun `empty lists do not count as data`() {
+        val emptyLists =
+            DailyHealthRecord(
+                date = "d",
+                exercises = emptyList(),
+                nutrition = emptyList(),
+                metadata = metadata,
+            )
+
+        assertFalse(emptyLists.hasAnyData())
     }
 }

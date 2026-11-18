@@ -2,6 +2,8 @@ package com.healthconnect.export.repository
 
 import android.content.Context
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.mock
@@ -81,5 +83,28 @@ class HealthConnectRepositoryTest {
 
         assertEquals(start, repo.clampToWindow(instant(start, 0), start, end))
         assertEquals(end, repo.clampToWindow(instant(end, 23, 59), start, end))
+    }
+
+    @Test
+    fun `background read permission string matches the manifest declaration`() {
+        // The permission is declared by hand in AndroidManifest.xml and
+        // res/xml/health_connect_permissions.xml; a library rename must not silently
+        // detach the requested permission from the declared one, otherwise the
+        // scheduled workers go back to failing every background read.
+        assertEquals(
+            "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND",
+            HealthConnectRepository.BACKGROUND_READ_PERMISSION,
+        )
+    }
+
+    @Test
+    fun `background read permission is added to the requested permission set on demand`() {
+        val types = setOf(com.healthconnect.export.data.HealthDataType.STEPS)
+
+        assertFalse(HealthConnectRepository.BACKGROUND_READ_PERMISSION in repo.getPermissionsForTypes(types))
+        assertTrue(
+            HealthConnectRepository.BACKGROUND_READ_PERMISSION in
+                repo.getPermissionsForTypes(types, includeBackgroundRead = true),
+        )
     }
 }

@@ -63,6 +63,21 @@ object ExportSettings {
     /** True when a webhook delivery can be attempted at all. */
     fun hasWebhook(config: ExportConfig): Boolean = config.webhookUrl.isNotBlank()
 
+    /** True when either automatic delivery path is enabled (daily export or every-2-hours). */
+    fun isAutoDeliveryEnabled(config: ExportConfig): Boolean = config.autoSendWebhook || config.autoSendWebhookEvery2Hours
+
+    /**
+     * True when the user saved a webhook URL, even an empty one.
+     *
+     * The background workers carry a configuration snapshot in their input data,
+     * which WorkManager keeps for the whole life of the job. Without this check a
+     * URL the user cleared kept receiving data through the old snapshot.
+     */
+    fun hasStoredWebhookUrl(context: Context): Boolean = prefs(context).contains(KEY_WEBHOOK_URL)
+
+    /** True when the user saved the automatic webhook switches (as opposed to defaults). */
+    fun hasStoredAutoSendWebhook(context: Context): Boolean = prefs(context).contains(KEY_AUTO_SEND_WEBHOOK)
+
     private fun loadTypes(prefs: SharedPreferences): Set<HealthDataType> {
         val names = prefs.getStringSet(KEY_SELECTED_TYPES, null) ?: return HealthDataType.entries.toSet()
         val types = names.mapNotNull { name -> HealthDataType.entries.firstOrNull { it.name == name } }

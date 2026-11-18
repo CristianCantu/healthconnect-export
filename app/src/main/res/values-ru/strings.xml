@@ -163,6 +163,7 @@
     <!-- ViewModel messages -->
     <string name="vm_check_permissions">Проверка разрешений…</string>
     <string name="vm_permissions_required">Требуются разрешения Health Connect. Подтвердите в открывшемся окне.</string>
+    <string name="vm_background_read_missing">Разрешите Health Connect фоновый доступ (READ_HEALTH_DATA_IN_BACKGROUND), иначе выгрузка по расписанию не сможет читать данные, когда приложение в фоне.</string>
     <string name="vm_reading_data">Чтение данных…</string>
     <string name="vm_saving_days">Сохранение %d дней…</string>
     <string name="vm_saved_files">Сохранено %d файлов</string>
@@ -277,4 +278,8 @@
     <string name="notification_channel_export_desc">Показывается, когда выгрузка по расписанию читает и отправляет данные о здоровье.</string>
     <string name="notification_export_title">Выгрузка данных о здоровье</string>
     <string name="notification_export_text">Читаем и отправляем данные о здоровье…</string>
+    <string name="notification_channel_alerts">Проблемы доставки</string>
+    <string name="notification_channel_alerts_desc">Показывается, когда выгрузка по расписанию не может прочитать или отправить данные.</string>
+    <string name="notification_delivery_failed_title">Выгрузка по расписанию не работает</string>
+    <string name="notification_delivery_failed_text">Не удалось отправить данные: %1$s</string>
 </resources>

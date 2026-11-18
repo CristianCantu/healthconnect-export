@@ -63,6 +63,9 @@ MainActivity (ComponentActivity)
 - **Auth split (authentication vs authorization)**: `GoogleAuthProvider` wraps Credential Manager (`GetGoogleIdOption` + `GoogleIdTokenCredential`) for sign-in and AuthorizationClient (`Identity.getAuthorizationClient`) for the Drive scope — the legacy `GoogleSignIn`/`GoogleSignInClient` API was removed in `play-services-auth` 22.0.0. `DriveManager.signIn()` only authenticates; the Drive scope is requested lazily by `syncToDrive()`, which launches the consent `IntentSender` and resumes the pending upload on `onAuthorizationResult()`.
 - **Session restore**: `DriveSessionStore` (SharedPreferences) remembers the connected email, since Credential Manager has no synchronous "last account" query. `DriveManager.refreshDriveStatus()` treats a stored email as connected and silently reuses the cached/authorized token without showing consent UI; `signOut()` clears the stored session synchronously and clears the credential state, so no silent reconnection happens afterwards.
 - **Update check**: HEAD request to the GitHub `releases/latest` URL, version parsed from the redirect `Location` header; release notes fetched from the GitHub API (`releases/latest`) for the "What's new" dialog.
+- **Background Health Connect reads**: Android 14+ rejects every read from a background process unless the app holds `READ_HEALTH_DATA_IN_BACKGROUND`. The app declares and requests that permission (together with the per-type ones); promoting the worker to a foreground service (`ExportForegroundNotifier`) is only a best-effort extra, because Android 12+ forbids starting an FGS from the background and a WorkManager job is not an exemption.
+- **Retry policy of the workers**: `DeliveryOutcome` decides whether WorkManager retries — transient problems (network, 5xx, a `SecurityException` while the background permission is granted) retry, permanent ones (missing `READ_HEALTH_DATA_IN_BACKGROUND`, HTTP 4xx) end the run with `Result.success()` so the job is never terminated and the next period heals itself. No worker ever returns `Result.failure()`.
+- **Delivery diagnostics**: `DeliveryAlertNotifier` posts one deduplicated notification per outage and clears it on the next success; `DeliveryLog` only advances its resume point for days with real data (`DailyHealthRecord.hasAnyData()` filters the pre-seeded empty days of `readPeriodInBatch`).
 - **ExportDataUseCase**: Encapsulates the complete export workflow as a `Flow<ExportStep>`, making it testable and separable from ViewModel lifecycle.
 - **Separate UI components**: Each card (DriveStatus, Webhook, Schedule, DataType, DateRange, DataSource, ExportedFiles, ExportSummary) is in its own file under `ui/components/`.
 
@@ -88,7 +91,9 @@ healthconnect-export/
 │       │   ├── util/
 │       │   │   ├── LocaleManager.kt
 │       │   │   ├── BatteryOptimization.kt  # Doze-exemption state + request intent
+│       │   │   ├── DeliveryAlertNotifier.kt # Deduplicated notification for a broken delivery pipeline
 │       │   │   ├── DeliveryLog.kt          # Last attempt/success + 100-entry delivery ring buffer
+│       │   │   ├── ExportForegroundNotifier.kt # Best-effort FGS promotion while a worker reads
 │       │   │   └── ExportSettings.kt       # Export config read from SharedPreferences by the workers
 │       │   ├── auth/
 │       │   │   ├── GoogleAuthProvider.kt # Credential Manager sign-in + AuthorizationClient (Drive scope)
@@ -124,10 +129,11 @@ healthconnect-export/
 │       │       ├── DailyExportWorker.kt             # Scheduled export (daily/weekly)
 │       │       ├── Every2HoursWebhookWorker.kt      # Webhook-only send every 2 hours
 │       │       ├── CatchUpWebhookWorker.kt          # Sends every day missed since the last delivered day
+│       │       ├── DeliveryOutcome.kt               # Shared retry/notify decision for the delivery workers
 │       │       └── DeliveryWatchdog.kt              # Inexact Doze-allowed alarm (every 6 h) re-enqueuing both jobs
 │       ├── main/res/
-│       │   ├── values/strings.xml              # English (211 strings)
-│       │   ├── values-ru/strings.xml           # Russian (211 strings, полный перевод)
+│       │   ├── values/strings.xml              # English (220 strings)
+│       │   ├── values-ru/strings.xml           # Russian (220 strings, полный перевод)
 │       │   ├── values/themes.xml
 │       │   ├── drawable/ic_github.xml          # GitHub logo for the About card
 │       │   └── xml/health_connect_permissions.xml
@@ -229,33 +235,35 @@ Every2HoursWebhookWorker (every 2h)
 
 ## Unit tests
 
-**Test files (397 tests total):**
+**Test files (426 tests total):**
 
 | File | Tests | Scope |
 |---|---|---|
 | `ExportViewModelTest` | 54 | ViewModel states: export, webhook, Drive sign-in/session restore, signed-out flag, Drive scope consent, update check, export format, schedule hour, retention, file actions |
-| `WebhookRepositoryTest` | 39 | sendRecords via local HTTP server (success/error/auth/special chars/JSON body) + URL validation |
-| `DataModelsSerializationTest` | 39 | Roundtrip serialization: DailyHealthRecord, ExportConfig (incl. format/hour), enums, SpeedData, sourceDisplayName |
+| `WebhookRepositoryTest` | 42 | sendRecords via local HTTP server (success/error/auth/special chars/JSON body) + URL validation + retryability of HTTP codes |
+| `DataModelsSerializationTest` | 42 | Roundtrip serialization: DailyHealthRecord, ExportConfig (incl. format/hour), enums, SpeedData, sourceDisplayName, `hasAnyData()` |
 | `LocalExportRepositoryTest` | 31 | File operations: save (JSON/CSV), list, cleanup, delete both formats, filename format |
 | `HighlightJsonSyntaxTest` | 31 | JSON syntax highlighting: strings, numbers, booleans, null, nested objects, arrays, escaped quotes |
-| `DailyExportWorkerTest` | 30 | doWork() (success/already-exported/empty/exceptions) + schedule() (daily/weekly/manual/cancel, schedule hour) |
+| `DailyExportWorkerTest` | 32 | doWork() (success/no data/permission handling/4xx not retried/exceptions) + schedule() (daily/weekly/manual/cancel, schedule hour) |
 | `HumanReadableMapperTest` | 27 | 8 mapper functions: bodyPosition, specimenSource, sleepStage, exerciseType, etc. |
 | `GoogleDriveRepositoryTest` | 26 | Drive sync: upload, list, download, delete, token handling, special characters |
-| `Every2HoursWebhookWorkerTest` | 18 | doWork (happy path, blank URL, exceptions) + schedule/cancel |
+| `Every2HoursWebhookWorkerTest` | 20 | doWork (happy path, blank URL, empty day not delivered, permission handling, exceptions) + schedule/cancel |
 | `ExportDataUseCaseTest` | 16 | Export workflow: permissions, health check, progress, webhook, Drive sync |
 | `CsvMapperTest` | 13 | CSV flattening: header/row sync, RFC 4180 escaping, double formatting, missing sections |
 | `LocaleManagerTest` | 12 | localeDisplayName all branches, saveLocale/getSavedLocale |
-| `DeliveryLogTest` | 12 | Last attempt/success persistence, ring buffer capping, delivered-date bookkeeping |
-| `CatchUpWebhookWorkerTest` | 11 | Catch-up window (7 days on the first run, capped at 30), resume point, retry on errors/unavailable Health Connect |
+| `DeliveryLogTest` | 13 | Last attempt/success persistence, ring buffer capping, delivered-date bookkeeping, full `clear()` |
+| `CatchUpWebhookWorkerTest` | 14 | Catch-up window (7 days on the first run, capped at 30), resume point, retry on errors/unavailable Health Connect, no retry without background access |
 | `DeliveryWatchdogTest` | 6 | Alarm arm/cancel, re-enqueue of both periodic jobs on fire, tolerates a missing AlarmManager |
 | `DeliveryWatchdogSchedulingTest` | 6 | Initial delay and interval of the watchdog schedule |
-| `ExportSettingsTest` | 5 | SharedPreferences-backed export config: defaults and roundtrip |
+| `ExportSettingsTest` | 7 | SharedPreferences-backed export config: defaults, roundtrip, stored/cleared webhook URL, auto-delivery switch |
 | `ExportedFilesCardTest` | 5 | visibleExportFiles slicing: collapse to newest N, showAll, ≤N files, empty list |
-| `DeliveryWatchdogCatchUpTest` | 5 | When the watchdog queues a catch-up, based on the last successful delivery |
+| `DeliveryWatchdogCatchUpTest` | 6 | When the watchdog queues a catch-up: stale success, never delivered, automatic delivery off |
 | `DeliveryBootReceiverTest` | 4 | BOOT_COMPLETED / MY_PACKAGE_REPLACED restores the schedule and queues a catch-up |
 | `DateRangeCardTest` | 3 | Compose UI tests: presets, custom dates, picker interaction |
 | `BatteryOptimizationTest` | 3 | Doze exemption state and request intent |
-| `WatchdogAlarmReceiverTest` | 1 | Alarm fire enqueues the catch-up delivery |
+| `WatchdogAlarmReceiverTest` | 2 | Alarm fire enqueues the catch-up delivery when it is stale; nothing when automatic delivery is off |
+| `HealthConnectRepositoryTest` | 7 | Record attribution window, preferred-origin filtering |
+| `ExportForegroundNotifierTest` | 4 | Foreground notification/channel used by the background workers |
 
 **Run tests:**
 
@@ -442,6 +450,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | `FOREGROUND_SERVICE` | Scheduled work |
 | `RECEIVE_BOOT_COMPLETED` | Reschedule after reboot |
 | `health.READ_*` | Health Connect data types (20 types) |
+| `health.READ_HEALTH_DATA_IN_BACKGROUND` | Reading Health Connect from the scheduled workers on Android 14+ (requested with the other health permissions) |
 
 ---
 
@@ -473,7 +482,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 - Policy: `ExistingPeriodicWorkPolicy.UPDATE` (both periodic jobs)
 - Constraints: none — a `RequiresBatteryNotLow` constraint silently blocked both workers
 - **Watchdog**: `DeliveryWatchdog` arms an inexact Doze-allowed alarm (every 6h) that re-enqueues both periodic jobs and queues `CatchUpWebhookWorker`; `DeliveryBootReceiver` does the same after `BOOT_COMPLETED` / `MY_PACKAGE_REPLACED` / `QUICKBOOT_POWERON`
-- **Catch-up**: `CatchUpWebhookWorker` sends every day after `DeliveryLog.lastDataDate` (default window 7 days, capped at 30); the periodic and catch-up workers never return `Result.failure()` — WorkManager terminates a failed job permanently
+- **Catch-up**: `CatchUpWebhookWorker` sends every day after `DeliveryLog.lastDataDate` (default window 7 days, capped at 30) and only runs when an automatic delivery path is enabled; the watchdog queues it when the last success is at least 6 h old or when nothing was ever delivered, and the periodic and catch-up workers never return `Result.failure()` — WorkManager terminates a failed job permanently
 - **Diagnostics**: `DeliveryLog` keeps the last attempt, the last success and a 100-entry ring buffer in SharedPreferences; the Schedule tab renders them plus the battery-optimization state
 
 ---

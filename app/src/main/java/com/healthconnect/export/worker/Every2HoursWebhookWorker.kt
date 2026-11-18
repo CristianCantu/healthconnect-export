@@ -75,53 +75,54 @@ class Every2HoursWebhookWorker(
                     return@withContext Result.success()
                 }
 
-                // Health Connect (Android 14+) rejects background reads unless the
-                // app is in the foreground or running as a foreground service.
+                // Best-effort only: Android 12+ refuses the promotion while the app
+                // runs in the background, and the background read permission is what
+                // makes the read legal there.
                 ExportForegroundNotifier.promoteToForeground(this@Every2HoursWebhookWorker)
 
-                // Read today's data
+                // Read today's data. Days without a single record are pre-seeded by
+                // the repository, so they are dropped here: an empty payload must not
+                // count as a delivered day.
                 val today = LocalDate.now()
                 val records =
-                    healthRepo.readPeriodInBatch(
-                        startDate = today,
-                        endDate = today,
-                        types = config.enabledTypes,
-                        selectedSourcePackage = config.selectedSourcePackage,
-                    )
+                    healthRepo
+                        .readPeriodInBatch(
+                            startDate = today,
+                            endDate = today,
+                            types = config.enabledTypes,
+                            selectedSourcePackage = config.selectedSourcePackage,
+                        ).filter { it.hasAnyData() }
+
+                if (records.isEmpty()) {
+                    DeliveryLog.recordIdle(applicationContext, TRIGGER, "no health data $today")
+                    return@withContext Result.success()
+                }
 
                 // Send to webhook (no local save, no Drive sync)
                 when (val result = webhookRepo.sendRecords(config.webhookUrl, records, config.webhookAuthToken)) {
-                    is WebhookResult.Success -> {
-                        DeliveryLog.recordSuccess(applicationContext, TRIGGER, records.map { it.date }, statusCode = result.statusCode)
-                        Result.success()
-                    }
-                    is WebhookResult.Error -> {
-                        DeliveryLog.recordFailure(
+                    is WebhookResult.Success ->
+                        DeliveryOutcome.delivered(applicationContext, TRIGGER, records.map { it.date }, result.statusCode)
+                    is WebhookResult.Error ->
+                        DeliveryOutcome.failure(
                             applicationContext,
                             TRIGGER,
                             "HTTP ${result.statusCode}: ${result.message}",
+                            retry = result.isRetryable,
                         )
-                        Result.retry()
-                    }
                 }
             } catch (e: SecurityException) {
-                // Retry, never fail: a failed periodic run is terminated by
-                // WorkManager for good, which is how the delivery went silent.
-                DeliveryLog.recordFailure(applicationContext, TRIGGER, "permissions: ${e.message}")
-                Result.retry()
+                DeliveryOutcome.permissionFailure(applicationContext, TRIGGER, healthRepo, e)
             } catch (e: IllegalStateException) {
-                DeliveryLog.recordFailure(applicationContext, TRIGGER, "health connect: ${e.message}")
-                Result.retry()
+                DeliveryOutcome.failure(applicationContext, TRIGGER, "health connect: ${e.message}", retry = true)
             } catch (e: Exception) {
-                DeliveryLog.recordFailure(applicationContext, TRIGGER, e.message ?: e.toString())
-                Result.retry()
+                DeliveryOutcome.failure(applicationContext, TRIGGER, e.message ?: e.toString(), retry = true)
             }
         }
 
     /**
      * Input data carries the configuration snapshot taken when the job was
      * enqueued; the webhook settings are refreshed from the persisted values so
-     * a URL/token changed later still applies to that job.
+     * a URL/token changed (or cleared) later still applies to that job.
      */
     private fun resolveConfig(): ExportConfig {
         val fromInput =
@@ -129,14 +130,12 @@ class Every2HoursWebhookWorker(
                 runCatching { Json.decodeFromString<ExportConfig>(configJson) }.getOrNull()
             } ?: return ExportSettings.loadConfig(applicationContext)
 
+        if (!ExportSettings.hasStoredWebhookUrl(applicationContext)) return fromInput
+
         val persisted = ExportSettings.loadConfig(applicationContext)
-        return if (persisted.webhookUrl.isNotBlank()) {
-            fromInput.copy(
-                webhookUrl = persisted.webhookUrl,
-                webhookAuthToken = persisted.webhookAuthToken,
-            )
-        } else {
-            fromInput
-        }
+        return fromInput.copy(
+            webhookUrl = persisted.webhookUrl,
+            webhookAuthToken = persisted.webhookAuthToken,
+        )
     }
 }

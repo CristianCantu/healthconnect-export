@@ -10,6 +10,7 @@ import com.healthconnect.export.repository.GoogleDriveRepository
 import com.healthconnect.export.repository.HealthConnectRepository
 import com.healthconnect.export.repository.LocalExportRepository
 import com.healthconnect.export.repository.WebhookRepository
+import com.healthconnect.export.repository.WebhookResult
 import com.healthconnect.export.util.DeliveryLog
 import com.healthconnect.export.util.ExportForegroundNotifier
 import com.healthconnect.export.util.ExportSettings
@@ -125,8 +126,9 @@ class DailyExportWorker(
         withContext(Dispatchers.IO) {
             val config = resolveConfig()
             try {
-                // Health Connect (Android 14+) rejects background reads unless the
-                // app is in the foreground or running as a foreground service.
+                // Best-effort only: Android 12+ refuses the promotion while the app
+                // runs in the background, and the background read permission is what
+                // makes the read legal there.
                 ExportForegroundNotifier.promoteToForeground(this@DailyExportWorker)
 
                 // Export completed days only. This avoids repeatedly sending a partial
@@ -148,7 +150,10 @@ class DailyExportWorker(
                         selectedSourcePackage = config.selectedSourcePackage,
                     )
 
-                if (records.isEmpty()) {
+                // The repository pre-seeds every day of the window, so "empty" means
+                // "no day carries a single record", not "empty list".
+                val recordsWithData = records.filter { it.hasAnyData() }
+                if (recordsWithData.isEmpty()) {
                     Log.w(TAG, "doWork: no health data returned for period $startDate..$endDate")
                     DeliveryLog.recordIdle(applicationContext, TRIGGER, "no data $startDate..$endDate")
                     return@withContext Result.success()
@@ -164,47 +169,46 @@ class DailyExportWorker(
                             driveRepo.uploadFile(file, "HealthConnectExport/${file.name}")
                         }
                     if (driveResults.any { it == null }) {
-                        DeliveryLog.recordFailure(applicationContext, TRIGGER, "Drive upload failed")
-                        return@withContext Result.retry()
+                        return@withContext DeliveryOutcome.failure(
+                            applicationContext,
+                            TRIGGER,
+                            "Drive upload failed",
+                            retry = true,
+                        )
                     }
                 }
 
                 // Send to webhook if enabled
                 if (config.autoSendWebhook && config.webhookUrl.isNotBlank()) {
-                    when (val result = webhookRepo.sendRecords(config.webhookUrl, records, config.webhookAuthToken)) {
-                        is com.healthconnect.export.repository.WebhookResult.Success ->
-                            DeliveryLog.recordSuccess(applicationContext, TRIGGER, records.map { it.date }, statusCode = result.statusCode)
-                        is com.healthconnect.export.repository.WebhookResult.Error -> {
-                            DeliveryLog.recordFailure(
+                    when (val result = webhookRepo.sendRecords(config.webhookUrl, recordsWithData, config.webhookAuthToken)) {
+                        is WebhookResult.Success ->
+                            DeliveryOutcome.delivered(applicationContext, TRIGGER, recordsWithData.map { it.date }, result.statusCode)
+                        is WebhookResult.Error ->
+                            DeliveryOutcome.failure(
                                 applicationContext,
                                 TRIGGER,
                                 "HTTP ${result.statusCode}: ${result.message}",
+                                retry = result.isRetryable,
                             )
-                            return@withContext Result.retry()
-                        }
                     }
+                } else {
+                    Result.success()
                 }
-
-                Result.success()
             } catch (e: SecurityException) {
-                // Retry, never fail: WorkManager terminates a periodic job
-                // permanently when a run reports failure, and the pipeline then
-                // stays dead until the app is opened by hand.
-                DeliveryLog.recordFailure(applicationContext, TRIGGER, "permissions: ${e.message}")
-                Result.retry()
+                // Retry only when the background permission is granted; otherwise the
+                // run would fail identically forever and never deliver anything.
+                DeliveryOutcome.permissionFailure(applicationContext, TRIGGER, healthRepo, e)
             } catch (e: IllegalStateException) {
-                DeliveryLog.recordFailure(applicationContext, TRIGGER, "health connect: ${e.message}")
-                Result.retry()
+                DeliveryOutcome.failure(applicationContext, TRIGGER, "health connect: ${e.message}", retry = true)
             } catch (e: Exception) {
-                DeliveryLog.recordFailure(applicationContext, TRIGGER, e.message ?: e.toString())
-                Result.retry()
+                DeliveryOutcome.failure(applicationContext, TRIGGER, e.message ?: e.toString(), retry = true)
             }
         }
 
     /**
      * Input data carries the configuration snapshot taken when the job was
      * enqueued; the webhook settings are refreshed from the persisted values so
-     * a URL/token changed later still applies to that job.
+     * a URL/token changed (or cleared) later still applies to that job.
      */
     private fun resolveConfig(): ExportConfig {
         val persisted = ExportSettings.loadConfig(applicationContext)
@@ -216,15 +220,13 @@ class DailyExportWorker(
                 frequency = ExportFrequency.DAILY,
                 autoSyncDrive = true,
             )
-        return if (persisted.webhookUrl.isNotBlank()) {
-            base.copy(
-                webhookUrl = persisted.webhookUrl,
-                webhookAuthToken = persisted.webhookAuthToken,
-                autoSendWebhook = persisted.autoSendWebhook,
-                autoSendWebhookEvery2Hours = persisted.autoSendWebhookEvery2Hours,
-            )
-        } else {
-            base
-        }
+        if (!ExportSettings.hasStoredWebhookUrl(applicationContext)) return base
+
+        return base.copy(
+            webhookUrl = persisted.webhookUrl,
+            webhookAuthToken = persisted.webhookAuthToken,
+            autoSendWebhook = if (ExportSettings.hasStoredAutoSendWebhook(applicationContext)) persisted.autoSendWebhook else base.autoSendWebhook,
+            autoSendWebhookEvery2Hours = persisted.autoSendWebhookEvery2Hours,
+        )
     }
 }

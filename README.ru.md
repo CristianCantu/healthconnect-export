@@ -107,7 +107,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Тестирование 🧪
 
 ```bash
-# Запустить все модульные тесты (397 тестов)
+# Запустить все модульные тесты (426)
 ./gradlew testDebugUnitTest
 
 # Отчёт покрытия + проверка порогов
@@ -115,33 +115,35 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 # Открыть: app/build/reports/jacoco/jacocoTestReport/html/index.html
 ```
 
-**Наборы тестов (всего 397):**
+**Наборы тестов (всего 426):**
 
 | Файл | Тестов | Что проверяет |
 |---|---|---|
 | `ExportViewModelTest` | 54 | Состояния ViewModel: экспорт, webhook, вход в Drive/восстановление сессии, флаг sign-out, согласие на Drive-скоуп, проверка обновлений, формат, час расписания, retention, действия с файлами |
-| `WebhookRepositoryTest` | 39 | sendRecords через локальный HTTP-сервер (успех/ошибка/авторизация/спецсимволы/JSON body) + валидация URL |
-| `DataModelsSerializationTest` | 39 | Roundtrip-сериализация: DailyHealthRecord, ExportConfig (включая формат/час), enum'ы, SpeedData, sourceDisplayName |
+| `WebhookRepositoryTest` | 42 | sendRecords через локальный HTTP-сервер (успех/ошибка/авторизация/спецсимволы/JSON-тело) + валидация URL + retry-политика по HTTP-кодам |
+| `DataModelsSerializationTest` | 42 | Roundtrip-сериализация: DailyHealthRecord, ExportConfig (включая формат/час), enum-ы, SpeedData, sourceDisplayName, `hasAnyData()` |
 | `LocalExportRepositoryTest` | 31 | Файловые операции: сохранение (JSON/CSV), список, очистка, удаление обоих форматов, формат имени |
 | `HighlightJsonSyntaxTest` | 31 | Подсветка синтаксиса JSON: строки, числа, boolean, null, вложенные объекты, массивы, экранированные кавычки |
-| `DailyExportWorkerTest` | 30 | doWork() (успех/уже экспортировано/пусто/исключения) + schedule() (daily/weekly/manual/cancel, час расписания) |
+| `DailyExportWorkerTest` | 32 | doWork() (успех/нет данных/обработка разрешений/4xx без retry/исключения) + schedule() (daily/weekly/manual/cancel, час расписания) |
 | `HumanReadableMapperTest` | 27 | 8 mapper-функций: bodyPosition, specimenSource, sleepStage, exerciseType и др. |
 | `GoogleDriveRepositoryTest` | 26 | Синхронизация Drive: загрузка, список, скачивание, удаление, работа с токеном, спецсимволы |
-| `Every2HoursWebhookWorkerTest` | 18 | doWork (happy path, пустой URL, исключения) + schedule/cancel |
+| `Every2HoursWebhookWorkerTest` | 20 | doWork (happy path, пустой URL, пустой день не отправляется, обработка разрешений, исключения) + schedule/cancel |
 | `ExportDataUseCaseTest` | 16 | Сценарий экспорта: разрешения, проверка Health Connect, прогресс, webhook, Drive |
 | `CsvMapperTest` | 13 | CSV-уплощение: синхронизация заголовка/строки, экранирование RFC 4180, форматирование чисел, отсутствующие секции |
 | `LocaleManagerTest` | 12 | Все ветки localeDisplayName, saveLocale/getSavedLocale |
-| `DeliveryLogTest` | 12 | Сохранение последней попытки/успеха, ограничение кольцевого буфера, учёт доставленных дат |
-| `CatchUpWebhookWorkerTest` | 11 | Окно догона (7 дней при первом запуске, максимум 30), точка возобновления, retry при ошибках и недоступном Health Connect |
+| `DeliveryLogTest` | 13 | Сохранение последней попытки/успеха, ограничение ring-буфера, учёт доставленных дат, полная очистка `clear()` |
+| `CatchUpWebhookWorkerTest` | 14 | Окно догона (7 дней при первом запуске, максимум 30), точка возобновления, retry при ошибках/недоступном Health Connect, без retry без фонового разрешения |
 | `DeliveryWatchdogTest` | 6 | Постановка/снятие alarm, повторная постановка обеих периодических задач при срабатывании, устойчивость к отсутствию AlarmManager |
 | `DeliveryWatchdogSchedulingTest` | 6 | Первая задержка и интервал расписания watchdog-а |
-| `ExportSettingsTest` | 5 | Конфигурация экспорта поверх SharedPreferences: значения по умолчанию и roundtrip |
+| `ExportSettingsTest` | 7 | Конфиг экспорта в SharedPreferences: значения по умолчанию, roundtrip, сохранённый/очищенный URL, переключатель автодоставки |
 | `ExportedFilesCardTest` | 5 | Срез visibleExportFiles: свёртка до N новых, showAll, ≤N файлов, пустой список |
-| `DeliveryWatchdogCatchUpTest` | 5 | Условия запуска догона из watchdog-а по времени последней успешной доставки |
+| `DeliveryWatchdogCatchUpTest` | 6 | Когда watchdog ставит догон: устаревший успех, ничего не доставлено, автодоставка выключена |
 | `DeliveryBootReceiverTest` | 4 | BOOT_COMPLETED / MY_PACKAGE_REPLACED восстанавливает расписание и ставит догон |
 | `DateRangeCardTest` | 3 | Compose UI тесты: пресеты, свои даты, взаимодействие с пикером |
 | `BatteryOptimizationTest` | 3 | Состояние Doze-исключения и intent запроса |
-| `WatchdogAlarmReceiverTest` | 1 | Срабатывание alarm ставит в очередь догон |
+| `WatchdogAlarmReceiverTest` | 2 | Срабатывание alarm ставит догон, если доставка устарела; ничего — если автодоставка выключена |
+| `HealthConnectRepositoryTest` | 7 | Окно атрибуции записей, фильтрация по источнику, набор разрешений для фонового чтения |
+| `ExportForegroundNotifierTest` | 4 | Foreground-уведомление и канал, которые используют фоновые воркеры |
 
 ## CI/CD 🚀
 

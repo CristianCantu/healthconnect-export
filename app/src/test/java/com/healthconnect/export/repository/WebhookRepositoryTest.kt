@@ -579,4 +579,28 @@ class WebhookRepositoryTest {
             assertTrue(error.message.isNotBlank())
         }
     }
+
+    @Test
+    fun `permanent client errors are not retryable`() {
+        for (code in listOf(400, 401, 403, 404, 409, 422)) {
+            assertFalse("HTTP \$code must not be retried", WebhookResult.Error(code, "nope").isRetryable)
+        }
+    }
+
+    @Test
+    fun `network, timeout, throttling and server errors are retryable`() {
+        for (code in listOf(0, 408, 429, 500, 502, 503, 599)) {
+            assertTrue("HTTP \$code must be retried", WebhookResult.Error(code, "later").isRetryable)
+        }
+    }
+
+    @Test
+    fun `an error body with a permanent status is not retried`() {
+        withServer(responseCode = 404, responseBody = "not found") { url ->
+            val result = runBlocking { repo.sendRecords(url, singleRecord, null) }
+
+            assertTrue(result is WebhookResult.Error)
+            assertFalse((result as WebhookResult.Error).isRetryable)
+        }
+    }
 }

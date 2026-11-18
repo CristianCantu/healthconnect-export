@@ -251,9 +251,10 @@ class CatchUpWebhookWorkerTest {
     }
 
     @Test
-    fun `retries when health permissions are missing`() {
+    fun `retries when health permissions are missing but background access is granted`() {
         runBlocking {
             configureWebhook()
+            whenever(mockHealthRepo.hasBackgroundReadPermission()).thenReturn(true)
             whenever(mockHealthRepo.readPeriodInBatch(any(), any(), any(), anyOrNull(), anyOrNull()))
                 .thenThrow(SecurityException("denied"))
 
@@ -261,6 +262,58 @@ class CatchUpWebhookWorkerTest {
 
             assertEquals(ListenableWorker.Result.retry(), result)
             assertTrue(DeliveryLog.status(mockApp).lastAttemptResult!!.contains("permissions"))
+        }
+    }
+
+    @Test
+    fun `stops retrying when the background read permission is missing`() {
+        runBlocking {
+            // Without READ_HEALTH_DATA_IN_BACKGROUND every background read is
+            // rejected; retrying cannot succeed until the user grants it.
+            configureWebhook()
+            whenever(mockHealthRepo.hasBackgroundReadPermission()).thenReturn(false)
+            whenever(mockHealthRepo.readPeriodInBatch(any(), any(), any(), anyOrNull(), anyOrNull()))
+                .thenThrow(SecurityException("denied"))
+
+            val result = createWorker().doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            assertTrue(
+                DeliveryLog.status(mockApp).lastAttemptResult!!.contains("READ_HEALTH_DATA_IN_BACKGROUND"),
+            )
+            verify(mockWebhookRepo, never()).sendRecords(any(), any(), anyOrNull())
+        }
+    }
+
+    @Test
+    fun `does not retry a permanent webhook error`() {
+        runBlocking {
+            configureWebhook()
+            whenever(mockHealthRepo.readPeriodInBatch(any(), any(), any(), anyOrNull(), anyOrNull()))
+                .thenReturn(listOf(record(today)))
+            whenever(mockWebhookRepo.sendRecords(any(), any(), anyOrNull()))
+                .thenReturn(WebhookResult.Error(404, "not found"))
+
+            val result = createWorker().doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            assertTrue(DeliveryLog.status(mockApp).lastAttemptResult!!.startsWith("failed"))
+        }
+    }
+
+    @Test
+    fun `does not send when automatic delivery is disabled`() {
+        runBlocking {
+            ExportSettings
+                .prefs(mockApp)
+                .edit()
+                .putString(ExportSettings.KEY_WEBHOOK_URL, "https://example.com/hook")
+                .commit()
+
+            val result = createWorker().doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            verify(mockWebhookRepo, never()).sendRecords(any(), any(), anyOrNull())
         }
     }
 

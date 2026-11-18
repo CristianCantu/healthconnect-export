@@ -17,7 +17,7 @@ import java.time.format.DateTimeFormatter
  *    instead of only in an external alert.
  */
 object DeliveryLog {
-    private const val PREFS_NAME = "healthconnect_export_prefs"
+    const val PREFS_NAME = "healthconnect_export_prefs"
     private const val KEY_LAST_ATTEMPT_AT = "delivery_last_attempt_at"
     private const val KEY_LAST_ATTEMPT_RESULT = "delivery_last_attempt_result"
     private const val KEY_LAST_SUCCESS_AT = "delivery_last_success_at"
@@ -37,8 +37,11 @@ object DeliveryLog {
         val lastDataDate: LocalDate? = null,
     )
 
+    /** Shared preferences file used by every delivery-related record. */
+    fun prefs(context: Context) = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
     fun status(context: Context): Status {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = prefs(context)
         return Status(
             lastAttemptAt = prefs.getLong(KEY_LAST_ATTEMPT_AT, 0L).takeIf { it > 0L },
             lastAttemptResult = prefs.getString(KEY_LAST_ATTEMPT_RESULT, null),
@@ -52,8 +55,7 @@ object DeliveryLog {
 
     /** Log entries, newest first. */
     fun entries(context: Context): List<String> =
-        context
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs(context)
             .getString(KEY_ENTRIES, "")
             ?.lineSequence()
             ?.filter { it.isNotBlank() }
@@ -83,7 +85,7 @@ object DeliveryLog {
                 "${deliveredDates.size} day(s) up to $newest"
             }
         val result = if (statusCode == null) "ok: $detail" else "HTTP $statusCode: $detail"
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = prefs(context)
         prefs
             .edit()
             .putLong(KEY_LAST_ATTEMPT_AT, now)
@@ -102,8 +104,7 @@ object DeliveryLog {
         detail: String,
         now: Long = System.currentTimeMillis(),
     ) {
-        context
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs(context)
             .edit()
             .putLong(KEY_LAST_ATTEMPT_AT, now)
             .putString(KEY_LAST_ATTEMPT_RESULT, "failed: $detail")
@@ -118,8 +119,7 @@ object DeliveryLog {
         detail: String,
         now: Long = System.currentTimeMillis(),
     ) {
-        context
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs(context)
             .edit()
             .putLong(KEY_LAST_ATTEMPT_AT, now)
             .putString(KEY_LAST_ATTEMPT_RESULT, "idle: $detail")
@@ -128,10 +128,13 @@ object DeliveryLog {
     }
 
     fun clear(context: Context) {
-        context
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs(context)
             .edit()
             .remove(KEY_ENTRIES)
+            .remove(KEY_LAST_ATTEMPT_AT)
+            .remove(KEY_LAST_ATTEMPT_RESULT)
+            .remove(KEY_LAST_SUCCESS_AT)
+            .remove(KEY_LAST_DATA_DATE)
             .apply()
     }
 
@@ -139,7 +142,7 @@ object DeliveryLog {
         context: Context,
         line: String,
     ) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = prefs(context)
         val kept =
             (
                 prefs

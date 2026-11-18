@@ -69,8 +69,23 @@ class DeliveryWatchdogCatchUpTest {
     }
 
     @Test
-    fun `without any previous success nothing is enqueued`() {
+    fun `without any previous success a catch-up is enqueued`() {
+        // A device that never delivered has no resume point, but it is exactly the
+        // case where the scheduled jobs deliver nothing: the catch-up worker uses
+        // its first-run window instead of waiting for a success that never came.
         configureWebhook()
+
+        assertTrue(DeliveryWatchdog.catchUpIfStale(context, "app_start"))
+        assertNotNull(catchUpWorkState())
+    }
+
+    @Test
+    fun `with automatic delivery off nothing is enqueued`() {
+        ExportSettings
+            .prefs(context)
+            .edit()
+            .putString(ExportSettings.KEY_WEBHOOK_URL, "https://example.com/hook")
+            .commit()
 
         assertFalse(DeliveryWatchdog.catchUpIfStale(context, "app_start"))
         assertNull(catchUpWorkState())

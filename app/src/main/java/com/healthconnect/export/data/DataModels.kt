@@ -33,7 +33,37 @@ data class DailyHealthRecord(
     @SerialName("speed") val speed: SpeedData? = null,
     @SerialName("menstruation") val menstruation: MenstruationData? = null,
     @SerialName("metadata") val metadata: ExportMetadata,
-)
+) {
+    /**
+     * True when at least one section carries a value.
+     *
+     * [com.healthconnect.export.repository.HealthConnectRepository.readPeriodInBatch]
+     * pre-seeds every day of the requested window, so a day without a single
+     * record is still present in the result. Delivering or "confirming" such a
+     * day would move the catch-up resume point past data that was never sent.
+     */
+    fun hasAnyData(): Boolean =
+        steps != null ||
+            heartRate != null ||
+            sleep != null ||
+            calories != null ||
+            distance != null ||
+            floorsClimbed != null ||
+            activeCalories != null ||
+            weight != null ||
+            bodyFat != null ||
+            bloodPressure != null ||
+            bloodGlucose != null ||
+            oxygenSaturation != null ||
+            bodyTemperature != null ||
+            respiratoryRate != null ||
+            hydration != null ||
+            restingHeartRate != null ||
+            speed != null ||
+            menstruation != null ||
+            !exercises.isNullOrEmpty() ||
+            !nutrition.isNullOrEmpty()
+}
 
 @Serializable
 data class StepsData(

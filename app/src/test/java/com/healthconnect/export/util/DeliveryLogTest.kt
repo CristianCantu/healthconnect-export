@@ -154,4 +154,20 @@ class DeliveryLogTest {
 
         assertEquals("ok: 1 day(s) up to 2026-09-22", DeliveryLog.status(context).lastAttemptResult)
     }
+
+    @Test
+    fun `clear removes the diagnostics, the resume point and the timestamps`() {
+        DeliveryLog.recordSuccess(context, "daily", listOf("2026-09-22"), fixedNow(0), statusCode = 200)
+        DeliveryLog.recordFailure(context, "daily", "boom", fixedNow(1))
+        assertTrue(DeliveryLog.entries(context).isNotEmpty())
+
+        DeliveryLog.clear(context)
+
+        val status = DeliveryLog.status(context)
+        assertTrue(DeliveryLog.entries(context).isEmpty())
+        assertNull(status.lastAttemptAt)
+        assertNull(status.lastAttemptResult)
+        assertNull(status.lastSuccessAt)
+        assertNull(status.lastDataDate)
+    }
 }

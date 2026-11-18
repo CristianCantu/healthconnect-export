@@ -276,7 +276,7 @@ class Every2HoursWebhookWorkerTest {
     // =============================================
 
     @Test
-    fun `security exception returns retry`() {
+    fun `security exception with the background permission granted returns retry`() {
         runBlocking {
             val config =
                 ExportConfig(
@@ -287,6 +287,7 @@ class Every2HoursWebhookWorkerTest {
                     autoSendWebhookEvery2Hours = true,
                 )
 
+            whenever(mockHealthRepo.hasBackgroundReadPermission()).thenReturn(true)
             whenever(mockHealthRepo.readPeriodInBatch(any(), any(), any(), anyOrNull(), anyOrNull()))
                 .thenThrow(SecurityException("No permission"))
 
@@ -294,6 +295,63 @@ class Every2HoursWebhookWorkerTest {
             val result = worker.doWork()
 
             assertEquals(ListenableWorker.Result.retry(), result)
+        }
+    }
+
+    @Test
+    fun `missing background read permission stops the retry loop`() {
+        runBlocking {
+            // Android 14+ rejects every background read without
+            // READ_HEALTH_DATA_IN_BACKGROUND; retrying that forever never delivers
+            // anything, so the run ends successfully and the next period retries.
+            val config =
+                ExportConfig(
+                    enabledTypes = setOf(HealthDataType.STEPS),
+                    frequency = ExportFrequency.MANUAL,
+                    autoSyncDrive = false,
+                    webhookUrl = "https://hooks.example.com/data",
+                    autoSendWebhookEvery2Hours = true,
+                )
+
+            whenever(mockHealthRepo.hasBackgroundReadPermission()).thenReturn(false)
+            whenever(mockHealthRepo.readPeriodInBatch(any(), any(), any(), anyOrNull(), anyOrNull()))
+                .thenThrow(SecurityException("No permission"))
+
+            val worker = createWorker(config)
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            verify(mockWebhookRepo, never()).sendRecords(any(), any(), anyOrNull())
+        }
+    }
+
+    @Test
+    fun `a pre-seeded day without data is not delivered`() {
+        runBlocking {
+            // readPeriodInBatch pre-seeds every requested day, so an all-null day is
+            // present even when Health Connect returned nothing. Sending it would
+            // move the catch-up resume point past data that was never delivered.
+            val config =
+                ExportConfig(
+                    enabledTypes = setOf(HealthDataType.STEPS),
+                    frequency = ExportFrequency.MANUAL,
+                    autoSyncDrive = false,
+                    webhookUrl = "https://hooks.example.com/data",
+                    autoSendWebhookEvery2Hours = true,
+                )
+            val emptyDay =
+                DailyHealthRecord(
+                    date = LocalDate.now().toString(),
+                    metadata = ExportMetadata("1.0.0", "2026-06-08T10:00:00", "Europe/Moscow"),
+                )
+
+            whenever(mockHealthRepo.readPeriodInBatch(any(), any(), any(), anyOrNull(), anyOrNull()))
+                .thenReturn(listOf(emptyDay))
+
+            val result = createWorker(config).doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            verify(mockWebhookRepo, never()).sendRecords(any(), any(), anyOrNull())
         }
     }
 

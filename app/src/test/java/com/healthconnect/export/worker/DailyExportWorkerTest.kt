@@ -154,6 +154,7 @@ class DailyExportWorkerTest {
                 listOf(
                     DailyHealthRecord(
                         date = LocalDate.now().minusDays(1).toString(),
+                        steps = StepsData(totalSteps = 5000, recordsCount = 100),
                         metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC"),
                     ),
                 )
@@ -201,7 +202,7 @@ class DailyExportWorkerTest {
     }
 
     @Test
-    fun `security exception returns retry`() {
+    fun `security exception with the background permission granted returns retry`() {
         runBlocking {
             val config =
                 ExportConfig(
@@ -211,6 +212,7 @@ class DailyExportWorkerTest {
                     autoSendWebhook = false,
                 )
 
+            whenever(mockHealthRepo.hasBackgroundReadPermission()).thenReturn(true)
             whenever(mockHealthRepo.readPeriodInBatch(any(), any(), any(), anyOrNull(), anyOrNull()))
                 .thenThrow(SecurityException("No permission"))
 
@@ -218,6 +220,59 @@ class DailyExportWorkerTest {
             val result = worker.doWork()
 
             assertEquals(ListenableWorker.Result.retry(), result)
+        }
+    }
+
+    @Test
+    fun `missing background read permission ends the run without retry`() {
+        runBlocking {
+            val config =
+                ExportConfig(
+                    enabledTypes = setOf(HealthDataType.STEPS),
+                    frequency = ExportFrequency.DAILY,
+                    autoSyncDrive = false,
+                    autoSendWebhook = false,
+                )
+
+            whenever(mockHealthRepo.hasBackgroundReadPermission()).thenReturn(false)
+            whenever(mockHealthRepo.readPeriodInBatch(any(), any(), any(), anyOrNull(), anyOrNull()))
+                .thenThrow(SecurityException("No permission"))
+
+            val worker = createWorker(config)
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            verify(mockLocalRepo, never()).saveRecords(any(), any())
+        }
+    }
+
+    @Test
+    fun `webhook 4xx is not retried`() {
+        runBlocking {
+            val config =
+                ExportConfig(
+                    enabledTypes = setOf(HealthDataType.STEPS),
+                    frequency = ExportFrequency.DAILY,
+                    autoSyncDrive = false,
+                    webhookUrl = "https://example.com/hook",
+                    autoSendWebhook = true,
+                )
+            val records =
+                listOf(
+                    DailyHealthRecord(
+                        date = LocalDate.now().minusDays(1).toString(),
+                        steps = StepsData(totalSteps = 5000, recordsCount = 100),
+                        metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC"),
+                    ),
+                )
+
+            whenever(mockHealthRepo.readPeriodInBatch(any(), any(), any(), anyOrNull(), anyOrNull())).thenReturn(records)
+            whenever(mockLocalRepo.saveRecords(any(), any())).thenReturn(emptyList())
+            whenever(mockWebhookRepo.sendRecords(any(), any(), anyOrNull())).thenReturn(WebhookResult.Error(401, "unauthorized"))
+
+            val result = createWorker(config).doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
         }
     }
 
@@ -278,6 +333,7 @@ class DailyExportWorkerTest {
                 listOf(
                     DailyHealthRecord(
                         date = LocalDate.now().minusDays(1).toString(),
+                        steps = StepsData(totalSteps = 5000, recordsCount = 100),
                         metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC"),
                     ),
                 )
@@ -309,6 +365,7 @@ class DailyExportWorkerTest {
                 listOf(
                     DailyHealthRecord(
                         date = LocalDate.now().minusDays(1).toString(),
+                        steps = StepsData(totalSteps = 5000, recordsCount = 100),
                         metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC"),
                     ),
                 )
@@ -335,6 +392,7 @@ class DailyExportWorkerTest {
                 listOf(
                     DailyHealthRecord(
                         date = LocalDate.now().minusDays(1).toString(),
+                        steps = StepsData(totalSteps = 5000, recordsCount = 100),
                         metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC"),
                     ),
                 )
@@ -674,6 +732,7 @@ class DailyExportWorkerTest {
                 listOf(
                     DailyHealthRecord(
                         date = LocalDate.now().minusDays(1).toString(),
+                        steps = StepsData(totalSteps = 5000, recordsCount = 100),
                         metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC"),
                     ),
                 )
@@ -713,6 +772,7 @@ class DailyExportWorkerTest {
                 listOf(
                     DailyHealthRecord(
                         date = LocalDate.now().minusDays(1).toString(),
+                        steps = StepsData(totalSteps = 5000, recordsCount = 100),
                         metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC"),
                     ),
                 )
@@ -744,6 +804,7 @@ class DailyExportWorkerTest {
                 listOf(
                     DailyHealthRecord(
                         date = LocalDate.now().minusDays(1).toString(),
+                        steps = StepsData(totalSteps = 5000, recordsCount = 100),
                         metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC"),
                     ),
                 )
@@ -779,6 +840,7 @@ class DailyExportWorkerTest {
                 listOf(
                     DailyHealthRecord(
                         date = LocalDate.now().minusDays(1).toString(),
+                        steps = StepsData(totalSteps = 5000, recordsCount = 100),
                         metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC"),
                     ),
                 )
@@ -822,6 +884,7 @@ class DailyExportWorkerTest {
                 listOf(
                     DailyHealthRecord(
                         date = LocalDate.now().minusDays(1).toString(),
+                        steps = StepsData(totalSteps = 5000, recordsCount = 100),
                         metadata = ExportMetadata("1.0.0", "2026-05-25T12:00:00", "UTC"),
                     ),
                 )

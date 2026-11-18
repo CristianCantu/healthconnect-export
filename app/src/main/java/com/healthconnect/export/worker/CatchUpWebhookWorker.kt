@@ -46,8 +46,10 @@ class CatchUpWebhookWorker(
             val trigger = inputData.getString(KEY_TRIGGER) ?: DEFAULT_TRIGGER
             val config = ExportSettings.loadConfig(applicationContext)
 
-            if (!ExportSettings.hasWebhook(config)) {
-                DeliveryLog.recordIdle(applicationContext, trigger, "no webhook url")
+            // Nothing scheduled to deliver: a manual-only webhook setup must not
+            // produce catch-up traffic of its own.
+            if (!ExportSettings.hasWebhook(config) || !ExportSettings.isAutoDeliveryEnabled(config)) {
+                DeliveryLog.recordIdle(applicationContext, trigger, "automatic delivery is off")
                 return@withContext Result.success()
             }
 
@@ -63,17 +65,19 @@ class CatchUpWebhookWorker(
             }
 
             try {
-                // Health Connect (Android 14+) rejects background reads unless the
-                // app is in the foreground or running as a foreground service.
+                // Best-effort only: Android 12+ refuses the promotion while the app
+                // runs in the background, and the background read permission is what
+                // makes the read legal there.
                 ExportForegroundNotifier.promoteToForeground(this@CatchUpWebhookWorker)
 
                 val records =
-                    healthRepo.readPeriodInBatch(
-                        startDate = start,
-                        endDate = today,
-                        types = config.enabledTypes,
-                        selectedSourcePackage = config.selectedSourcePackage,
-                    )
+                    healthRepo
+                        .readPeriodInBatch(
+                            startDate = start,
+                            endDate = today,
+                            types = config.enabledTypes,
+                            selectedSourcePackage = config.selectedSourcePackage,
+                        ).filter { it.hasAnyData() }
 
                 if (records.isEmpty()) {
                     // Nothing to send: keep the resume point so a later run retries this window.
@@ -82,30 +86,24 @@ class CatchUpWebhookWorker(
                 }
 
                 when (val result = webhookRepo.sendRecords(config.webhookUrl, records, config.webhookAuthToken)) {
-                    is WebhookResult.Success -> {
-                        DeliveryLog.recordSuccess(applicationContext, trigger, records.map { it.date }, statusCode = result.statusCode)
-                        Result.success()
-                    }
-                    is WebhookResult.Error -> {
-                        DeliveryLog.recordFailure(
+                    is WebhookResult.Success ->
+                        DeliveryOutcome.delivered(applicationContext, trigger, records.map { it.date }, result.statusCode)
+                    is WebhookResult.Error ->
+                        DeliveryOutcome.failure(
                             applicationContext,
                             trigger,
                             "HTTP ${result.statusCode}: ${result.message}",
+                            retry = result.isRetryable,
                         )
-                        Result.retry()
-                    }
                 }
             } catch (e: SecurityException) {
-                // Health permissions revoked — retry keeps the job alive and it
-                // heals itself as soon as the user grants them again.
-                DeliveryLog.recordFailure(applicationContext, trigger, "permissions: ${e.message}")
-                Result.retry()
+                // Health permissions revoked — retry only while they are granted, so a
+                // permanently missing background permission cannot spin forever.
+                DeliveryOutcome.permissionFailure(applicationContext, trigger, healthRepo, e)
             } catch (e: IllegalStateException) {
-                DeliveryLog.recordFailure(applicationContext, trigger, "health connect: ${e.message}")
-                Result.retry()
+                DeliveryOutcome.failure(applicationContext, trigger, "health connect: ${e.message}", retry = true)
             } catch (e: Exception) {
-                DeliveryLog.recordFailure(applicationContext, trigger, e.message ?: e.toString())
-                Result.retry()
+                DeliveryOutcome.failure(applicationContext, trigger, e.message ?: e.toString(), retry = true)
             }
         }
 }

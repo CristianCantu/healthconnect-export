@@ -107,7 +107,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Testing 🧪
 
 ```bash
-# Run all unit tests (397 tests)
+# Run all unit tests (426 tests)
 ./gradlew testDebugUnitTest
 
 # Coverage report + gate check
@@ -115,33 +115,35 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 # Open: app/build/reports/jacoco/jacocoTestReport/html/index.html
 ```
 
-**Test suites (397 total):**
+**Test suites (426 total):**
 
 | File | Tests | Scope |
 |---|---|---|
 | `ExportViewModelTest` | 54 | ViewModel states: export, webhook, Drive sign-in/session restore, signed-out flag, Drive scope consent, update check, export format, schedule hour, retention, file actions |
-| `WebhookRepositoryTest` | 39 | sendRecords via local HTTP server (success/error/auth/special chars/JSON body) + URL validation |
-| `DataModelsSerializationTest` | 39 | Roundtrip serialization: DailyHealthRecord, ExportConfig (incl. format/hour), enums, SpeedData, sourceDisplayName |
+| `WebhookRepositoryTest` | 42 | sendRecords via local HTTP server (success/error/auth/special chars/JSON body) + URL validation + retryability of HTTP codes |
+| `DataModelsSerializationTest` | 42 | Roundtrip serialization: DailyHealthRecord, ExportConfig (incl. format/hour), enums, SpeedData, sourceDisplayName, `hasAnyData()` |
 | `LocalExportRepositoryTest` | 31 | File operations: save (JSON/CSV), list, cleanup, delete both formats, filename format |
 | `HighlightJsonSyntaxTest` | 31 | JSON syntax highlighting: strings, numbers, booleans, null, nested objects, arrays, escaped quotes |
-| `DailyExportWorkerTest` | 30 | doWork() (success/already-exported/empty/exceptions) + schedule() (daily/weekly/manual/cancel, schedule hour) |
+| `DailyExportWorkerTest` | 32 | doWork() (success/no data/permission handling/4xx not retried/exceptions) + schedule() (daily/weekly/manual/cancel, schedule hour) |
 | `HumanReadableMapperTest` | 27 | 8 mapper functions: bodyPosition, specimenSource, sleepStage, exerciseType, etc. |
 | `GoogleDriveRepositoryTest` | 26 | Drive sync: upload, list, download, delete, token handling, special characters |
-| `Every2HoursWebhookWorkerTest` | 18 | doWork (happy path, blank URL, exceptions) + schedule/cancel |
+| `Every2HoursWebhookWorkerTest` | 20 | doWork (happy path, blank URL, empty day not delivered, permission handling, exceptions) + schedule/cancel |
 | `ExportDataUseCaseTest` | 16 | Export workflow: permissions, health check, progress, webhook, Drive sync |
 | `CsvMapperTest` | 13 | CSV flattening: header/row sync, RFC 4180 escaping, double formatting, missing sections |
 | `LocaleManagerTest` | 12 | localeDisplayName all branches, saveLocale/getSavedLocale |
-| `DeliveryLogTest` | 12 | Last attempt/success persistence, ring buffer capping, delivered-date bookkeeping |
-| `CatchUpWebhookWorkerTest` | 11 | Catch-up window (7 days on the first run, capped at 30), resume point, retry on errors/unavailable Health Connect |
+| `DeliveryLogTest` | 13 | Last attempt/success persistence, ring buffer capping, delivered-date bookkeeping, full `clear()` |
+| `CatchUpWebhookWorkerTest` | 14 | Catch-up window (7 days on the first run, capped at 30), resume point, retry on errors/unavailable Health Connect, no retry without background access |
 | `DeliveryWatchdogTest` | 6 | Alarm arm/cancel, re-enqueue of both periodic jobs on fire, tolerates a missing AlarmManager |
 | `DeliveryWatchdogSchedulingTest` | 6 | Initial delay and interval of the watchdog schedule |
-| `ExportSettingsTest` | 5 | SharedPreferences-backed export config: defaults and roundtrip |
+| `ExportSettingsTest` | 7 | SharedPreferences-backed export config: defaults, roundtrip, stored/cleared webhook URL, auto-delivery switch |
 | `ExportedFilesCardTest` | 5 | visibleExportFiles slicing: collapse to newest N, showAll, ≤N files, empty list |
-| `DeliveryWatchdogCatchUpTest` | 5 | When the watchdog queues a catch-up, based on the last successful delivery |
+| `DeliveryWatchdogCatchUpTest` | 6 | When the watchdog queues a catch-up: stale success, never delivered, automatic delivery off |
 | `DeliveryBootReceiverTest` | 4 | BOOT_COMPLETED / MY_PACKAGE_REPLACED restores the schedule and queues a catch-up |
 | `DateRangeCardTest` | 3 | Compose UI tests: presets, custom dates, picker interaction |
 | `BatteryOptimizationTest` | 3 | Doze exemption state and request intent |
-| `WatchdogAlarmReceiverTest` | 1 | Alarm fire enqueues the catch-up delivery |
+| `WatchdogAlarmReceiverTest` | 2 | Alarm fire enqueues the catch-up delivery when it is stale; nothing when automatic delivery is off |
+| `HealthConnectRepositoryTest` | 7 | Record attribution window, preferred-origin filtering, background read permission set |
+| `ExportForegroundNotifierTest` | 4 | Foreground notification/channel used by the background workers |
 
 ## CI/CD 🚀
 

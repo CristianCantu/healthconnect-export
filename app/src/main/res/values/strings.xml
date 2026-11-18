@@ -163,6 +163,7 @@
     <!-- ViewModel messages -->
     <string name="vm_check_permissions">Checking permissions…</string>
     <string name="vm_permissions_required">Health Connect permissions required. Please confirm in the opened window.</string>
+    <string name="vm_background_read_missing">Grant Health Connect background access (READ_HEALTH_DATA_IN_BACKGROUND), otherwise scheduled exports cannot read data while the app is in the background.</string>
     <string name="vm_reading_data">Reading data…</string>
     <string name="vm_saving_days">Saving %d days…</string>
     <string name="vm_saved_files">Saved %d files</string>
@@ -277,4 +278,8 @@
     <string name="notification_channel_export_desc">Shown while a scheduled export reads and delivers your health data.</string>
     <string name="notification_export_title">Exporting health data</string>
     <string name="notification_export_text">Reading and delivering your health data…</string>
+    <string name="notification_channel_alerts">Delivery problems</string>
+    <string name="notification_channel_alerts_desc">Shown when scheduled delivery cannot read or send your health data.</string>
+    <string name="notification_delivery_failed_title">Scheduled delivery is failing</string>
+    <string name="notification_delivery_failed_text">Health data could not be sent: %1$s</string>
 </resources>

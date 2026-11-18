@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContract
 import androidx.annotation.VisibleForTesting
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
+import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.*
 import androidx.health.connect.client.records.Record
@@ -39,6 +40,14 @@ class HealthConnectRepository(
         val PREFERRED_PACKAGES: List<String> =
             com.healthconnect.export.data.KNOWN_SOURCE_PACKAGES.keys
                 .toList()
+
+        /**
+         * Permission that allows reading Health Connect while the app is in the background.
+         *
+         * Android 14+ enforces it for every read that does not happen with a visible
+         * activity; without it the scheduled workers fail with `SecurityException`.
+         */
+        val BACKGROUND_READ_PERMISSION: String = HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
     }
 
     private var client: HealthConnectClient? = null
@@ -91,7 +100,10 @@ class HealthConnectRepository(
     /**
      * Возвращает набор Health Connect разрешений для указанных типов данных
      */
-    fun getPermissionsForTypes(types: Set<HealthDataType>): Set<String> {
+    fun getPermissionsForTypes(
+        types: Set<HealthDataType>,
+        includeBackgroundRead: Boolean = false,
+    ): Set<String> {
         val permissions = mutableSetOf<String>()
         types.forEach { type ->
             when (type) {
@@ -117,6 +129,7 @@ class HealthConnectRepository(
                 HealthDataType.SPEED -> permissions.add(HealthPermission.getReadPermission(SpeedRecord::class))
             }
         }
+        if (includeBackgroundRead) permissions.add(BACKGROUND_READ_PERMISSION)
         return permissions
     }
 
@@ -126,6 +139,29 @@ class HealthConnectRepository(
     suspend fun getGrantedPermissions(): Set<String> {
         val c = client ?: return emptySet()
         return c.permissionController.getGrantedPermissions()
+    }
+
+    /**
+     * True when the app may currently read Health Connect from the background.
+     *
+     * On platforms that do not know the feature at all (Android 13 and lower, or a
+     * provider without support) nothing is gated, so this returns true. On
+     * Android 14+ it reflects the user-granted `READ_HEALTH_DATA_IN_BACKGROUND`
+     * permission, which the scheduled workers need to read anything at all.
+     */
+    suspend fun hasBackgroundReadPermission(): Boolean {
+        val c = client ?: return false
+        val featureStatus =
+            runCatching {
+                c.features.getFeatureStatus(HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND)
+            }.getOrNull()
+        if (featureStatus != null && featureStatus != HealthConnectFeatures.FEATURE_STATUS_AVAILABLE) {
+            return true
+        }
+        if (featureStatus == null) return true
+        return runCatching {
+            c.permissionController.getGrantedPermissions().contains(BACKGROUND_READ_PERMISSION)
+        }.getOrDefault(false)
     }
 
     /**
@@ -758,15 +794,7 @@ class HealthConnectRepository(
                 day = day.plusDays(1)
             }
 
-            val daysWithData =
-                result.count { r ->
-                    r.steps != null ||
-                        r.heartRate != null ||
-                        r.sleep != null ||
-                        r.calories != null ||
-                        r.distance != null ||
-                        r.weight != null
-                }
+            val daysWithData = result.count { it.hasAnyData() }
             Log.d(TAG, "readPeriodInBatch: completed, ${result.size} days total, $daysWithData days with data")
             result
         }

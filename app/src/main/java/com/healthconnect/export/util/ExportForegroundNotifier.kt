@@ -15,11 +15,11 @@ import com.healthconnect.export.R
  * Foreground-service notification used while a scheduled export runs.
  *
  * Health Connect on Android 14 refuses to read data from the background unless
- * the app either holds `READ_HEALTH_DATA_IN_BACKGROUND` or is running as a
- * foreground service. That permission is dangerous and must be granted by the
- * user, so every background worker promotes itself to a foreground service for
- * the duration of the read instead. Without this the periodic jobs failed with
- * `SecurityException` while a foreground export of the same data succeeded.
+ * the app either holds `READ_HEALTH_DATA_IN_BACKGROUND` or is in the foreground.
+ * The permission is the supported route and is declared/requested by the app;
+ * the promotion below is a best-effort extra for the cases where the system
+ * still allows a background app to start a foreground service (visible app, or
+ * the user granted the battery-optimization exemption).
  */
 object ExportForegroundNotifier {
     const val CHANNEL_ID = "health_export"
@@ -47,9 +47,8 @@ object ExportForegroundNotifier {
     /**
      * Builds the [ForegroundInfo] for a running export.
      *
-     * The service type is `health` because the worker reads Health Connect data;
-     * it must match `foregroundServiceType` in the manifest, otherwise Android 14
-     * refuses the promotion.
+     * The service type must match `foregroundServiceType` in the manifest,
+     * otherwise Android 14 refuses the promotion.
      */
     fun foregroundInfo(
         context: Context,
@@ -78,24 +77,24 @@ object ExportForegroundNotifier {
     }
 
     /**
-     * Promotes the running worker to a foreground service so Health Connect allows
-     * the read on Android 14+.
+     * Promotes the running worker to a foreground service.
      *
-     * Failing to promote is logged but not fatal: the export may still succeed when
-     * the app happens to be in the foreground, and losing the whole export over a
-     * notification problem would be worse than attempting the read anyway. The
-     * Health Connect rejection, if it comes, is reported through [DeliveryLog] as
-     * before.
+     * Android 12+ rejects the promotion with `ForegroundServiceStartNotAllowedException`
+     * when the app itself runs in the background (a WorkManager job is not an
+     * exemption), so a `false` result is normal for a scheduled run and must not
+     * abort the export: the background read permission is what makes the read
+     * legal. The reason is logged so a real failure is still visible.
      */
-    suspend fun promoteToForeground(worker: CoroutineWorker) {
+    suspend fun promoteToForeground(worker: CoroutineWorker): Boolean =
         try {
             worker.setForeground(
                 foregroundInfo(worker.applicationContext, SERVICE_TYPE),
             )
+            true
         } catch (e: Exception) {
             Log.w(TAG, "could not enter foreground: ${e.message}", e)
+            false
         }
-    }
 
     private fun buildNotification(context: Context): Notification =
         NotificationCompat

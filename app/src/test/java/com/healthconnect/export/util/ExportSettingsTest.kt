@@ -2,6 +2,7 @@ package com.healthconnect.export.util
 
 import android.app.Application
 import android.content.Context
+import com.healthconnect.export.data.ExportConfig
 import com.healthconnect.export.data.ExportFormat
 import com.healthconnect.export.data.ExportFrequency
 import com.healthconnect.export.data.HealthDataType
@@ -108,5 +109,31 @@ class ExportSettingsTest {
         assertEquals(ExportFrequency.DAILY, ExportSettings.loadFrequency(plainContext))
         assertEquals(ExportSettings.PREFS_NAME, "healthconnect_export_prefs")
         assertNotNull(ExportSettings.prefs(context))
+    }
+
+    @Test
+    fun `a cleared webhook url is still reported as stored`() {
+        assertFalse(ExportSettings.hasStoredWebhookUrl(context))
+
+        prefs.edit().putString(ExportSettings.KEY_WEBHOOK_URL, "https://example.com/hook").apply()
+        assertTrue(ExportSettings.hasStoredWebhookUrl(context))
+
+        // An explicitly emptied URL must win over the snapshot held by the workers.
+        prefs.edit().putString(ExportSettings.KEY_WEBHOOK_URL, "").apply()
+        assertTrue(ExportSettings.hasStoredWebhookUrl(context))
+        assertEquals("", ExportSettings.loadConfig(context).webhookUrl)
+    }
+
+    @Test
+    fun `automatic delivery is enabled by either switch`() {
+        val base =
+            ExportConfig(
+                enabledTypes = setOf(HealthDataType.STEPS),
+                frequency = ExportFrequency.DAILY,
+                autoSyncDrive = false,
+            )
+        assertFalse(ExportSettings.isAutoDeliveryEnabled(base))
+        assertTrue(ExportSettings.isAutoDeliveryEnabled(base.copy(autoSendWebhook = true)))
+        assertTrue(ExportSettings.isAutoDeliveryEnabled(base.copy(autoSendWebhookEvery2Hours = true)))
     }
 }

@@ -29,6 +29,14 @@
     <uses-permission android:name="android.permission.health.READ_MENSTRUATION" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY_RMSSD" />
     <uses-permission android:name="android.permission.health.READ_SPEED" />
+    <!--
+      Health Connect on Android 14+ rejects every read from the background unless
+      the app either holds this permission or is visibly in the foreground. The
+      scheduled workers run with the app in the background, so without it every
+      run died with SecurityException and retried forever without delivering
+      anything. Requested together with the per-type read permissions.
+    -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 
     <!-- Storage for local exports (legacy — scoped storage used on 33+) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -39,12 +47,12 @@
     <!-- Foreground service for scheduled work -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!--
-      Health Connect on Android 14 refuses to read data from the background unless
-      the app either holds READ_HEALTH_DATA_IN_BACKGROUND or runs as a foreground
-      service. DATA_SYNC is granted at install time (normal|instant), while
-      READ_HEALTH_DATA_IN_BACKGROUND is dangerous and must be granted by the user,
-      so the foreground-service route is the one that keeps scheduled exports
-      working without an extra permission prompt.
+      Foreground-service promotion is a best-effort fallback only: Android 12+
+      forbids starting a foreground service from the background unless the app is
+      visible or exempt from battery optimization, which is exactly the situation a
+      scheduled run lives in. Background reads are enabled by
+      READ_HEALTH_DATA_IN_BACKGROUND above; the dataSync type keeps the promotion
+      working whenever the system does allow it.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -112,9 +120,8 @@
           WorkManager promotes a worker to a foreground service through
           SystemForegroundService (not SystemJobService). The type must be declared
           there, otherwise Android rejects the promotion with "foregroundServiceType
-          is not a subset of ... 0x0" and the background read never reaches Health
-          Connect. dataSync is used rather than health, which would additionally
-          require BODY_SENSORS/ACTIVITY_RECOGNITION.
+          is not a subset of ... 0x0". dataSync is used rather than health, which
+          would additionally require BODY_SENSORS/ACTIVITY_RECOGNITION.
         -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
