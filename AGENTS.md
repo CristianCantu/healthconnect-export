@@ -56,6 +56,7 @@ MainActivity (ComponentActivity)
 - **TypeHandler pattern** (HealthConnectRepository): Each health data type is registered with a `TypeHandler` that knows its record class, time selector, extraction logic, and record updater. This enables data-type-agnostic batch processing — one API call per type for the entire period, grouped by day.
 - **Manager classes** (DriveManager, WebhookManager, ScheduleManager): Extracted from ExportViewModel to keep it focused on UI state orchestration. Each manager owns its state flow and persistence.
 - **Export format** (`ExportFormat` in ExportConfig): JSON or CSV; `CsvMapper` keeps header and row columns in sync from one definition. Saving a day removes the counterpart-format file.
+- **Detailed readings**: blood pressure, blood glucose, oxygen saturation, weight, body fat and heart rate carry the raw measurements next to the aggregate (`readings` / `samples` in `DataModels.kt`, filled by the `extract*` functions). Timestamps are ISO-8601 with the record's own offset, `source` is the data-origin package; the lists default to empty so older JSON parses, and only JSON gets them. `HealthConnectRepository.capReadings()` evenly subsamples any list above `MAX_READINGS_PER_DAY` (2000) so a one-sample-per-second device cannot produce a multi-megabyte day file or webhook body. Heart-rate samples are ordered by `Instant`, never by the formatted string — records from different apps carry different offsets.
 - **Retention**: `retentionDays` in settings — `cleanupOldExports()` runs at app start and after each export, deleting files older than the cutoff.
 - **Schedule time of day**: `scheduleHour` in ExportConfig; `DailyExportWorker.schedule()` sets an initial delay until the next occurrence of that hour; `ScheduleManager.rescheduleExport()` re-creates the work silently when the hour changes.
 - **File actions**: History rows share via `FileProvider` (`xml/file_paths.xml` mirrors `getExportDirectory()` paths) and delete with a confirmation dialog; `deleteExport()` removes both JSON and CSV variants of a day.
@@ -151,6 +152,7 @@ healthconnect-export/
 │           │   └── WatchdogAlarmReceiverTest.kt
 │           ├── repository/
 │           │   ├── GoogleDriveRepositoryTest.kt
+│           │   ├── HealthConnectReadingsTest.kt
 │           │   ├── LocalExportRepositoryTest.kt
 │           │   └── WebhookRepositoryTest.kt
 │           ├── ui/
@@ -235,13 +237,14 @@ Every2HoursWebhookWorker (every 2h)
 
 ## Unit tests
 
-**Test files (425 tests total):**
+**Test files (436 tests total):**
 
 | File | Tests | Scope |
 |---|---|---|
 | `ExportViewModelTest` | 54 | ViewModel states: export, webhook, Drive sign-in/session restore, signed-out flag, Drive scope consent, update check, export format, schedule hour, retention, file actions |
 | `WebhookRepositoryTest` | 42 | sendRecords via local HTTP server (success/error/auth/special chars/JSON body) + URL validation + retryability of HTTP codes |
-| `DataModelsSerializationTest` | 42 | Roundtrip serialization: DailyHealthRecord, ExportConfig (incl. format/hour), enums, SpeedData, sourceDisplayName, `hasAnyData()` |
+| `DataModelsSerializationTest` | 45 | Roundtrip serialization: DailyHealthRecord, ExportConfig (incl. format/hour), enums, SpeedData, sourceDisplayName, `hasAnyData()`, detailed readings |
+| `HealthConnectReadingsTest` | 8 | Detailed readings: ISO time with the record offset, ordering across zone offsets, 2000-per-day payload cap |
 | `LocalExportRepositoryTest` | 31 | File operations: save (JSON/CSV), list, cleanup, delete both formats, filename format |
 | `HighlightJsonSyntaxTest` | 31 | JSON syntax highlighting: strings, numbers, booleans, null, nested objects, arrays, escaped quotes |
 | `DailyExportWorkerTest` | 32 | doWork() (success/no data/permission handling/4xx not retried/exceptions) + schedule() (daily/weekly/manual/cancel, schedule hour) |

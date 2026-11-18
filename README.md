@@ -24,6 +24,7 @@ Android app for exporting Google Health Connect data to JSON format with optiona
 - **Every-2-hours webhook** — send current day's data to webhook every 2 hours (no Drive sync)
 - **Reliable background delivery** — Health Connect background-read permission (required on Android 14+), boot receiver, a Doze-proof watchdog alarm and an automatic catch-up of days missed while the app was idle (filled immediately when the app is opened, otherwise by the watchdog alarm), a delivery log in the Schedule tab and a notification when delivery breaks
 - **20 data types** — steps, heart rate, sleep, calories, exercise, nutrition, speed, and more
+- **Detailed readings** — blood pressure, blood glucose, oxygen saturation, weight, body fat and heart rate carry the individual measurements next to the daily aggregate (`readings` / `samples`, JSON only, capped at 2000 per type per day)
 - **Date range selection** — last 7/30 days or custom range with date picker
 - **Data source selection** — pick preferred health data source (Google Fit, Samsung Health, etc.)
 - **Export cancellation** — cancel in-progress export with one tap
@@ -107,7 +108,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Testing 🧪
 
 ```bash
-# Run all unit tests (425 tests)
+# Run all unit tests (436 tests)
 ./gradlew testDebugUnitTest
 
 # Coverage report + gate check
@@ -115,13 +116,14 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 # Open: app/build/reports/jacoco/jacocoTestReport/html/index.html
 ```
 
-**Test suites (425 total):**
+**Test suites (436 total):**
 
 | File | Tests | Scope |
 |---|---|---|
 | `ExportViewModelTest` | 54 | ViewModel states: export, webhook, Drive sign-in/session restore, signed-out flag, Drive scope consent, update check, export format, schedule hour, retention, file actions |
 | `WebhookRepositoryTest` | 42 | sendRecords via local HTTP server (success/error/auth/special chars/JSON body) + URL validation + retryability of HTTP codes |
-| `DataModelsSerializationTest` | 42 | Roundtrip serialization: DailyHealthRecord, ExportConfig (incl. format/hour), enums, SpeedData, sourceDisplayName, `hasAnyData()` |
+| `DataModelsSerializationTest` | 45 | Roundtrip serialization: DailyHealthRecord, ExportConfig (incl. format/hour), enums, SpeedData, sourceDisplayName, `hasAnyData()`, detailed readings |
+| `HealthConnectReadingsTest` | 8 | Detailed readings: timestamp format/offset, ordering across zone offsets, 2000-per-day payload cap |
 | `LocalExportRepositoryTest` | 31 | File operations: save (JSON/CSV), list, cleanup, delete both formats, filename format |
 | `HighlightJsonSyntaxTest` | 31 | JSON syntax highlighting: strings, numbers, booleans, null, nested objects, arrays, escaped quotes |
 | `DailyExportWorkerTest` | 32 | doWork() (success/no data/permission handling/4xx not retried/exceptions) + schedule() (daily/weekly/manual/cancel, schedule hour) |
@@ -203,8 +205,8 @@ On push to `main`, a coverage badge is auto-committed to `badges/`.
 ### Release
 
 ```bash
-git tag v1.11
-git push origin v1.11
+git tag v1.12
+git push origin v1.12
 # CI: bump version → build → create GitHub Release
 ```
 
@@ -295,6 +297,40 @@ The JSON body is wrapped in a `messages` envelope:
 ```
 
 Each element in the `messages` array is a `DailyHealthRecord` — one per exported day — containing all selected health data types (steps, heart rate, sleep, calories, distance, floors climbed, active calories, weight, body fat, blood pressure, blood glucose, oxygen saturation, body temperature, respiratory rate, hydration, resting heart rate, exercises, nutrition, speed, and menstruation).
+
+### Detailed readings
+
+Blood pressure, blood glucose, oxygen saturation, weight, body fat and heart rate also list the individual measurements behind their daily aggregate:
+
+```json
+{
+  "date": "2026-09-19",
+  "blood_pressure": {
+    "systolic_mmhg": 124.5,
+    "diastolic_mmhg": 85.0,
+    "records_count": 2,
+    "readings": [
+      { "time": "2026-09-19T06:22:41.123-05:00", "systolic_mmhg": 141.0, "diastolic_mmhg": 98.0, "source": "com.omronhealthcare.omronconnect" },
+      { "time": "2026-09-19T20:10:00-05:00", "systolic_mmhg": 108.0, "diastolic_mmhg": 72.0, "source": "com.omronhealthcare.omronconnect" }
+    ]
+  },
+  "heart_rate": {
+    "avg_bpm": 72.5,
+    "min_bpm": 55,
+    "max_bpm": 142,
+    "records_count": 18,
+    "samples": [
+      { "time": "2026-09-19T08:00:00+03:00", "bpm": 68, "source": "com.xiaomi.hm.health" }
+    ]
+  }
+}
+```
+
+- `time` — ISO-8601 local time with the offset the record was written in (milliseconds preserved)
+- `source` — data-origin package name of the app that wrote the record
+- lists are oldest-first and default to `[]`, so JSON written by older versions still parses
+- a day with more than **2000** readings of one type (a device writing heart rate every second) is evenly subsampled — `records_count` and the aggregates still reflect every record
+- CSV keeps daily totals only; the detailed readings are JSON-only
 
 ## Scheduling ⏰
 
@@ -462,6 +498,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 | Version | Date | Highlights |
 |---|---|---|
+| [v1.12](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.12) | 2026-11-18 | Detailed readings per day (blood pressure, glucose, SpO₂, weight, body fat, heart rate) next to the aggregates, exercise type names now follow Health Connect's own ids, 436 tests |
 | [v1.11](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.11) | 2026-11-18 | Scheduled delivery fixed for real: Health Connect background-read permission, failure notification, 4xx without retry, empty days no longer swallow the catch-up point, 426 tests |
 | [v1.10](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.10) | 2026-09-27 | Google Sign-In migrated to Credential Manager, Drive scope requested lazily, catch-up of undelivered days on app open, 397 tests |
 | [v1.9](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.9) | 2026-09-25 | Background delivery survives reboots, Doze and OEM battery savers: watchdog alarm, boot receiver, catch-up of missed days, delivery log |

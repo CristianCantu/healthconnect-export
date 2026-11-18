@@ -35,6 +35,15 @@ class HealthConnectRepository(
         private const val PAGE_SIZE = 5000
 
         /**
+         * Верхняя граница числа подробных измерений одного типа за сутки.
+         *
+         * Устройство, пишущее пульс раз в секунду, даёт 86 400 сэмплов в день — это
+         * ~7 МБ JSON, и столько же пришлось бы заново отправлять на webhook каждые
+         * два часа. Сверх лимита записи прореживаются равномерно (см. [capReadings]).
+         */
+        internal const val MAX_READINGS_PER_DAY = 2000
+
+        /**
          * Пакеты приложений для фильтрации dataOrigin, упорядоченные по приоритету.
          * Берётся из KNOWN_SOURCE_PACKAGES в DataModels.kt.
          * Если данные есть от нескольких источников, берётся первый из списка.
@@ -293,17 +302,40 @@ class HealthConnectRepository(
         return StepsData(totalSteps = total, recordsCount = filtered.size)
     }
 
-    /** ISO-8601 local time with offset; falls back to the device's zone when the record has none. */
-    private fun localIso(
+    // ===== Detailed readings =====
+    //
+    // The daily aggregates are what most consumers read, but a report for a doctor (or a
+    // trend chart) needs every measurement, so each section also carries the raw readings
+    // it was averaged from: local ISO-8601 time, the values, and the data-origin package.
+
+    /** ISO-8601 local time with the record's own offset; device zone when the record has none. */
+    internal fun localIso(
         instant: Instant,
         offset: ZoneOffset?,
     ): String =
         OffsetDateTime
             .ofInstant(instant, offset ?: ZoneId.systemDefault())
-            .truncatedTo(ChronoUnit.SECONDS)
+            .truncatedTo(ChronoUnit.MILLIS)
             .toString()
 
-    private fun sourceOf(record: Record): String = record.metadata.dataOrigin.packageName
+    internal fun sourceOf(record: Record): String = record.metadata.dataOrigin.packageName
+
+    /**
+     * Heart-rate samples as export readings, oldest first.
+     *
+     * Ordering must use each sample's [Instant], not its formatted string: records from
+     * different apps carry different zone offsets, and sorting `2026-09-19T06:00-05:00`
+     * against `2026-09-19T09:00+00:00` as text puts them in the wrong order.
+     */
+    internal fun heartRateReadings(records: List<HeartRateRecord>): List<HeartRateSample> =
+        records
+            .flatMap { record ->
+                record.samples.map { sample ->
+                    sample.time to HeartRateSample(localIso(sample.time, record.startZoneOffset), sample.beatsPerMinute, sourceOf(record))
+                }
+            }.sortedBy { it.first }
+            .map { it.second }
+            .capReadings()
 
     private fun extractHeartRate(records: List<HeartRateRecord>): HeartRateData? {
         if (records.isEmpty()) return null
@@ -315,13 +347,7 @@ class HealthConnectRepository(
             minBpm = beats.min().toInt(),
             maxBpm = beats.max().toInt(),
             recordsCount = records.size,
-            samples =
-                records
-                    .flatMap { r ->
-                        r.samples.map { s ->
-                            HeartRateSample(localIso(s.time, r.startZoneOffset), s.beatsPerMinute, sourceOf(r))
-                        }
-                    }.sortedBy { it.time },
+            samples = heartRateReadings(records),
         )
     }
 
@@ -401,7 +427,8 @@ class HealthConnectRepository(
             readings =
                 records
                     .sortedBy { it.time }
-                    .map { WeightReading(localIso(it.time, it.zoneOffset), it.weight.inKilograms, sourceOf(it)) },
+                    .map { WeightReading(localIso(it.time, it.zoneOffset), it.weight.inKilograms, sourceOf(it)) }
+                    .capReadings(),
         )
     }
 
@@ -414,7 +441,8 @@ class HealthConnectRepository(
             readings =
                 records
                     .sortedBy { it.time }
-                    .map { BodyFatReading(localIso(it.time, it.zoneOffset), it.percentage.value, sourceOf(it)) },
+                    .map { BodyFatReading(localIso(it.time, it.zoneOffset), it.percentage.value, sourceOf(it)) }
+                    .capReadings(),
         )
     }
 
@@ -436,7 +464,7 @@ class HealthConnectRepository(
                         diastolicMmHg = it.diastolic.inMillimetersOfMercury,
                         source = sourceOf(it),
                     )
-                },
+                }.capReadings(),
         )
     }
 
@@ -458,7 +486,7 @@ class HealthConnectRepository(
                         levelMgPerDl = it.level.inMilligramsPerDeciliter,
                         source = sourceOf(it),
                     )
-                },
+                }.capReadings(),
         )
     }
 
@@ -471,7 +499,8 @@ class HealthConnectRepository(
             readings =
                 records
                     .sortedBy { it.time }
-                    .map { OxygenSaturationReading(localIso(it.time, it.zoneOffset), it.percentage.value, sourceOf(it)) },
+                    .map { OxygenSaturationReading(localIso(it.time, it.zoneOffset), it.percentage.value, sourceOf(it)) }
+                    .capReadings(),
         )
     }
 
@@ -919,4 +948,17 @@ class HealthConnectRepository(
 
         return records
     }
+}
+
+/**
+ * Evenly subsamples [this] down to [max] entries, keeping the first and the last.
+ *
+ * The cap bounds the payload: a device that writes heart rate every second produces
+ * 86 400 samples a day, and that day file is re-sent to the webhook every two hours.
+ * The stride keeps the curve representative instead of truncating it after midday.
+ */
+internal fun <T> List<T>.capReadings(max: Int = HealthConnectRepository.MAX_READINGS_PER_DAY): List<T> {
+    if (size <= max || max < 2) return this
+    val step = (size - 1).toDouble() / (max - 1)
+    return List(max) { index -> this[(index * step).toInt().coerceAtMost(size - 1)] }
 }

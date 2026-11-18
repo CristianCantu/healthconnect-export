@@ -8,10 +8,19 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 // ===== Individual readings =====
-// Each daily aggregate below also carries the raw readings it was computed
-// from, so consumers that need every measurement (e.g. a report for a doctor)
-// don't lose them to averaging. "time" is ISO-8601 local time with offset,
-// "source" is the package name of the app that wrote the record.
+// Blood pressure, blood glucose, oxygen saturation, weight, body fat and heart rate
+// also carry the raw readings their daily aggregate was computed from, so a consumer
+// that needs every measurement (a report for a doctor, a trend chart) does not lose
+// them to averaging.
+//
+// - "time": ISO-8601 local time with the record's own offset, e.g.
+//   "2026-09-19T06:22:41.123+03:00" (milliseconds preserved).
+// - "source": data-origin package name of the app that wrote the record.
+// - Both lists default to empty, so JSON written before they existed still decodes.
+// - The lists are capped at `HealthConnectRepository.MAX_READINGS_PER_DAY` (2000)
+//   readings per type per day, evenly subsampled beyond that; JSON/CSV aggregates
+//   and `records_count` are unaffected.
+// - Only JSON carries them: CSV keeps daily totals only.
 
 @Serializable
 data class BloodPressureReading(

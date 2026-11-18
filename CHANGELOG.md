@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.12] — 2026-11-18
+
+### Added
+- **Detailed readings next to the daily aggregates (#85, by @ChathamDaleJ):** blood pressure, blood glucose, oxygen saturation, weight, body fat and heart rate now carry the individual measurements their aggregate was computed from — `readings` for the first five and `samples` for heart rate. Each entry has `time` (ISO-8601 local time with the offset the record was written in), the values and `source` (data-origin package name). The lists are oldest-first, default to `[]`, so JSON written by older versions still decodes, and only JSON carries them — CSV keeps daily totals. A day with more than 2000 readings of one type (a device writing heart rate every second) is evenly subsampled, so a day file and the every-2-hour webhook body stay bounded while `records_count` and the aggregates still count every record
 
 ### Fixed
 - **Exercise type names came from a dense table, not from Health Connect's ids (#84):** 54 of the 61 official `ExerciseSessionRecord` ids were shifted by the gaps in the platform list (a `56 Running` session was exported as "Kite skiing", `70 Strength training` as "Table tennis", `37 Hiking` as "Meditation"), five ids (`79 Walking`, `80 Water polo`, `81 Weightlifting`, `82 Wheelchair`, `83 Yoga`) were missing and 18 ids that do not exist were invented. The mapper now follows the platform constants one-to-one and unknown ids fall back to `Other (<id>)` instead of losing the number. New data only — files exported before this fix keep their old labels
@@ -273,6 +276,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.12]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.12
 [1.11]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.11
 [1.10]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.10
 [1.9]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.9
