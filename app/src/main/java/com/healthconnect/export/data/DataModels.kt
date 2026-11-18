@@ -411,88 +411,140 @@ fun nutritionMealTypeToString(value: Int?): String? {
     }
 }
 
+/**
+ * Maps a Health Connect exercise type id to a human-readable name.
+ *
+ * The ids are **sparse** constants of `ExerciseSessionRecord` (0, 2, 4, 5, 8 … 83)
+ * and must follow the platform list one-to-one — a dense 0…N table shifted every
+ * name after the first gap (a `56 Running` session was exported as "Kite skiing").
+ * Unknown ids keep their number so a newer Health Connect cannot turn a real
+ * workout into a bare "Unknown".
+ */
 fun exerciseTypeToString(value: Int?): String? {
     if (value == null) return null
     return when (value) {
+        // ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT
         0 -> "Other workout"
-        1 -> "Back extension"
+        // EXERCISE_TYPE_BADMINTON
         2 -> "Badminton"
-        3 -> "Baseball"
-        4 -> "Basketball"
-        5 -> "Cycling"
-        6 -> "Stationary cycling"
-        7 -> "Boot camp"
-        8 -> "Boxing"
-        9 -> "Burpee"
-        10 -> "Calisthenics"
-        11 -> "Cricket"
-        12 -> "CrossFit"
-        13 -> "Crunch"
-        14 -> "Dancing"
-        15 -> "Deadlift"
-        16 -> "Fencing"
-        17 -> "American football"
-        18 -> "Australian football"
-        19 -> "Soccer"
-        20 -> "Frisbee"
-        21 -> "General workout"
-        22 -> "Golf"
-        23 -> "Breathing exercises"
-        24 -> "Gymnastics"
-        25 -> "Handball"
-        26 -> "HIIT"
-        27 -> "Hiking"
-        28 -> "Hockey"
-        29 -> "Figure skating"
-        30 -> "Jumping jack"
-        31 -> "Jump rope"
-        32 -> "Kayaking"
-        33 -> "Kettlebell"
-        34 -> "Kickboxing"
-        35 -> "Kitesurfing"
-        36 -> "Martial arts"
-        37 -> "Meditation"
-        38 -> "MMA"
-        39 -> "P90X"
-        40 -> "Pilates"
-        41 -> "Plank"
-        42 -> "Racquetball"
-        43 -> "Rock climbing"
-        44 -> "Roller skating"
-        45 -> "Rowing"
-        46 -> "Rowing machine"
-        47 -> "Rugby"
-        48 -> "Running"
-        49 -> "Treadmill"
-        50 -> "Sailing"
-        51 -> "Scuba diving"
-        52 -> "Ice skating"
-        53 -> "Skiing"
-        54 -> "Cross-country skiing"
-        55 -> "Downhill skiing"
-        56 -> "Kite skiing"
-        57 -> "Roller skiing"
-        58 -> "Sledding"
-        59 -> "Sleep"
-        60 -> "Snowboarding"
-        61 -> "Snowshoeing"
-        62 -> "Squash"
-        63 -> "Stair climbing"
-        64 -> "Stair stepper"
-        65 -> "Strength training"
-        66 -> "Stretching"
-        67 -> "Surfing"
-        68 -> "Swimming (open water)"
-        69 -> "Swimming (pool)"
-        70 -> "Table tennis"
-        71 -> "Tennis"
-        72 -> "Upper body"
-        73 -> "Volleyball"
-        74 -> "Walking"
-        75 -> "Water polo"
-        76 -> "Weightlifting"
-        77 -> "Wheelchair"
-        78 -> "Yoga"
+        // EXERCISE_TYPE_BASEBALL
+        4 -> "Baseball"
+        // EXERCISE_TYPE_BASKETBALL
+        5 -> "Basketball"
+        // EXERCISE_TYPE_BIKING
+        8 -> "Biking"
+        // EXERCISE_TYPE_BIKING_STATIONARY
+        9 -> "Stationary biking"
+        // EXERCISE_TYPE_BOOT_CAMP
+        10 -> "Boot camp"
+        // EXERCISE_TYPE_BOXING
+        11 -> "Boxing"
+        // EXERCISE_TYPE_CALISTHENICS
+        13 -> "Calisthenics"
+        // EXERCISE_TYPE_CRICKET
+        14 -> "Cricket"
+        // EXERCISE_TYPE_DANCING
+        16 -> "Dancing"
+        // EXERCISE_TYPE_ELLIPTICAL
+        25 -> "Elliptical"
+        // EXERCISE_TYPE_EXERCISE_CLASS
+        26 -> "Exercise class"
+        // EXERCISE_TYPE_FENCING
+        27 -> "Fencing"
+        // EXERCISE_TYPE_FOOTBALL_AMERICAN
+        28 -> "American football"
+        // EXERCISE_TYPE_FOOTBALL_AUSTRALIAN
+        29 -> "Australian football"
+        // EXERCISE_TYPE_FRISBEE_DISC
+        31 -> "Frisbee disc"
+        // EXERCISE_TYPE_GOLF
+        32 -> "Golf"
+        // EXERCISE_TYPE_GUIDED_BREATHING
+        33 -> "Guided breathing"
+        // EXERCISE_TYPE_GYMNASTICS
+        34 -> "Gymnastics"
+        // EXERCISE_TYPE_HANDBALL
+        35 -> "Handball"
+        // EXERCISE_TYPE_HIGH_INTENSITY_INTERVAL_TRAINING
+        36 -> "HIIT"
+        // EXERCISE_TYPE_HIKING
+        37 -> "Hiking"
+        // EXERCISE_TYPE_ICE_HOCKEY
+        38 -> "Ice hockey"
+        // EXERCISE_TYPE_ICE_SKATING
+        39 -> "Ice skating"
+        // EXERCISE_TYPE_MARTIAL_ARTS
+        44 -> "Martial arts"
+        // EXERCISE_TYPE_PADDLING
+        46 -> "Paddling"
+        // EXERCISE_TYPE_PARAGLIDING
+        47 -> "Paragliding"
+        // EXERCISE_TYPE_PILATES
+        48 -> "Pilates"
+        // EXERCISE_TYPE_RACQUETBALL
+        50 -> "Racquetball"
+        // EXERCISE_TYPE_ROCK_CLIMBING
+        51 -> "Rock climbing"
+        // EXERCISE_TYPE_ROLLER_HOCKEY
+        52 -> "Roller hockey"
+        // EXERCISE_TYPE_ROWING
+        53 -> "Rowing"
+        // EXERCISE_TYPE_ROWING_MACHINE
+        54 -> "Rowing machine"
+        // EXERCISE_TYPE_RUGBY
+        55 -> "Rugby"
+        // EXERCISE_TYPE_RUNNING
+        56 -> "Running"
+        // EXERCISE_TYPE_RUNNING_TREADMILL
+        57 -> "Treadmill running"
+        // EXERCISE_TYPE_SAILING
+        58 -> "Sailing"
+        // EXERCISE_TYPE_SCUBA_DIVING
+        59 -> "Scuba diving"
+        // EXERCISE_TYPE_SKATING
+        60 -> "Skating"
+        // EXERCISE_TYPE_SKIING
+        61 -> "Skiing"
+        // EXERCISE_TYPE_SNOWBOARDING
+        62 -> "Snowboarding"
+        // EXERCISE_TYPE_SNOWSHOEING
+        63 -> "Snowshoeing"
+        // EXERCISE_TYPE_SOCCER
+        64 -> "Soccer"
+        // EXERCISE_TYPE_SOFTBALL
+        65 -> "Softball"
+        // EXERCISE_TYPE_SQUASH
+        66 -> "Squash"
+        // EXERCISE_TYPE_STAIR_CLIMBING
+        68 -> "Stair climbing"
+        // EXERCISE_TYPE_STAIR_CLIMBING_MACHINE
+        69 -> "Stair climbing machine"
+        // EXERCISE_TYPE_STRENGTH_TRAINING
+        70 -> "Strength training"
+        // EXERCISE_TYPE_STRETCHING
+        71 -> "Stretching"
+        // EXERCISE_TYPE_SURFING
+        72 -> "Surfing"
+        // EXERCISE_TYPE_SWIMMING_OPEN_WATER
+        73 -> "Open water swimming"
+        // EXERCISE_TYPE_SWIMMING_POOL
+        74 -> "Pool swimming"
+        // EXERCISE_TYPE_TABLE_TENNIS
+        75 -> "Table tennis"
+        // EXERCISE_TYPE_TENNIS
+        76 -> "Tennis"
+        // EXERCISE_TYPE_VOLLEYBALL
+        78 -> "Volleyball"
+        // EXERCISE_TYPE_WALKING
+        79 -> "Walking"
+        // EXERCISE_TYPE_WATER_POLO
+        80 -> "Water polo"
+        // EXERCISE_TYPE_WEIGHTLIFTING
+        81 -> "Weightlifting"
+        // EXERCISE_TYPE_WHEELCHAIR
+        82 -> "Wheelchair"
+        // EXERCISE_TYPE_YOGA
+        83 -> "Yoga"
         else -> "Other ($value)"
     }
 }

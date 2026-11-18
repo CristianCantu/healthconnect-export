@@ -107,7 +107,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Testing 🧪
 
 ```bash
-# Run all unit tests (426 tests)
+# Run all unit tests (425 tests)
 ./gradlew testDebugUnitTest
 
 # Coverage report + gate check
@@ -115,7 +115,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 # Open: app/build/reports/jacoco/jacocoTestReport/html/index.html
 ```
 
-**Test suites (426 total):**
+**Test suites (425 total):**
 
 | File | Tests | Scope |
 |---|---|---|
@@ -125,7 +125,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | `LocalExportRepositoryTest` | 31 | File operations: save (JSON/CSV), list, cleanup, delete both formats, filename format |
 | `HighlightJsonSyntaxTest` | 31 | JSON syntax highlighting: strings, numbers, booleans, null, nested objects, arrays, escaped quotes |
 | `DailyExportWorkerTest` | 32 | doWork() (success/no data/permission handling/4xx not retried/exceptions) + schedule() (daily/weekly/manual/cancel, schedule hour) |
-| `HumanReadableMapperTest` | 27 | 8 mapper functions: bodyPosition, specimenSource, sleepStage, exerciseType, etc. |
+| `HumanReadableMapperTest` | 26 | 8 mapper functions: bodyPosition, specimenSource, sleepStage, exerciseType (every official id), etc. |
 | `GoogleDriveRepositoryTest` | 26 | Drive sync: upload, list, download, delete, token handling, special characters |
 | `Every2HoursWebhookWorkerTest` | 20 | doWork (happy path, blank URL, empty day not delivered, permission handling, exceptions) + schedule/cancel |
 | `ExportDataUseCaseTest` | 16 | Export workflow: permissions, health check, progress, webhook, Drive sync |

@@ -107,7 +107,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Тестирование 🧪
 
 ```bash
-# Запустить все модульные тесты (426)
+# Запустить все модульные тесты (425)
 ./gradlew testDebugUnitTest
 
 # Отчёт покрытия + проверка порогов
@@ -115,7 +115,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 # Открыть: app/build/reports/jacoco/jacocoTestReport/html/index.html
 ```
 
-**Наборы тестов (всего 426):**
+**Наборы тестов (всего 425):**
 
 | Файл | Тестов | Что проверяет |
 |---|---|---|
@@ -125,7 +125,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | `LocalExportRepositoryTest` | 31 | Файловые операции: сохранение (JSON/CSV), список, очистка, удаление обоих форматов, формат имени |
 | `HighlightJsonSyntaxTest` | 31 | Подсветка синтаксиса JSON: строки, числа, boolean, null, вложенные объекты, массивы, экранированные кавычки |
 | `DailyExportWorkerTest` | 32 | doWork() (успех/нет данных/обработка разрешений/4xx без retry/исключения) + schedule() (daily/weekly/manual/cancel, час расписания) |
-| `HumanReadableMapperTest` | 27 | 8 mapper-функций: bodyPosition, specimenSource, sleepStage, exerciseType и др. |
+| `HumanReadableMapperTest` | 26 | 8 mapper-функций: bodyPosition, specimenSource, sleepStage, exerciseType (все официальные id) и др. |
 | `GoogleDriveRepositoryTest` | 26 | Синхронизация Drive: загрузка, список, скачивание, удаление, работа с токеном, спецсимволы |
 | `Every2HoursWebhookWorkerTest` | 20 | doWork (happy path, пустой URL, пустой день не отправляется, обработка разрешений, исключения) + schedule/cancel |
 | `ExportDataUseCaseTest` | 16 | Сценарий экспорта: разрешения, проверка Health Connect, прогресс, webhook, Drive |

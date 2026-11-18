@@ -1,5 +1,6 @@
 package com.healthconnect.export.data
 
+import androidx.health.connect.client.records.ExerciseSessionRecord
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -19,7 +20,7 @@ import org.junit.Test
  * - measurementLocationToString (12 known + unknown + null)
  * - menstruationFlowToString (4 known + unknown + null)
  * - nutritionMealTypeToString (5 known + unknown + null)
- * - exerciseTypeToString (79 known + unknown + null)
+ * - exerciseTypeToString (every official Health Connect id + unknown + null)
  */
 class HumanReadableMapperTest {
     // =============================================
@@ -200,7 +201,7 @@ class HumanReadableMapperTest {
     }
 
     // =============================================
-    // exerciseTypeToString — biggest mapper (79 known)
+    // exerciseTypeToString — Health Connect's sparse exercise type ids
     // =============================================
 
     @Test
@@ -209,104 +210,118 @@ class HumanReadableMapperTest {
     }
 
     @Test
-    fun `exerciseTypeToString first 20 known values`() {
-        assertEquals("Other workout", exerciseTypeToString(0))
-        assertEquals("Back extension", exerciseTypeToString(1))
-        assertEquals("Badminton", exerciseTypeToString(2))
-        assertEquals("Baseball", exerciseTypeToString(3))
-        assertEquals("Basketball", exerciseTypeToString(4))
-        assertEquals("Cycling", exerciseTypeToString(5))
-        assertEquals("Stationary cycling", exerciseTypeToString(6))
-        assertEquals("Boot camp", exerciseTypeToString(7))
-        assertEquals("Boxing", exerciseTypeToString(8))
-        assertEquals("Burpee", exerciseTypeToString(9))
-        assertEquals("Calisthenics", exerciseTypeToString(10))
-        assertEquals("Cricket", exerciseTypeToString(11))
-        assertEquals("CrossFit", exerciseTypeToString(12))
-        assertEquals("Crunch", exerciseTypeToString(13))
-        assertEquals("Dancing", exerciseTypeToString(14))
-        assertEquals("Deadlift", exerciseTypeToString(15))
-        assertEquals("Fencing", exerciseTypeToString(16))
-        assertEquals("American football", exerciseTypeToString(17))
-        assertEquals("Australian football", exerciseTypeToString(18))
-        assertEquals("Soccer", exerciseTypeToString(19))
+    fun `exerciseTypeToString maps every official Health Connect exercise type`() {
+        // ExerciseSessionRecord constants in id order. The ids are sparse: a dense
+        // 0…N table shifted every name after the first gap (issue #84).
+        val expected =
+            mapOf(
+                0 to "Other workout",
+                2 to "Badminton",
+                4 to "Baseball",
+                5 to "Basketball",
+                8 to "Biking",
+                9 to "Stationary biking",
+                10 to "Boot camp",
+                11 to "Boxing",
+                13 to "Calisthenics",
+                14 to "Cricket",
+                16 to "Dancing",
+                25 to "Elliptical",
+                26 to "Exercise class",
+                27 to "Fencing",
+                28 to "American football",
+                29 to "Australian football",
+                31 to "Frisbee disc",
+                32 to "Golf",
+                33 to "Guided breathing",
+                34 to "Gymnastics",
+                35 to "Handball",
+                36 to "HIIT",
+                37 to "Hiking",
+                38 to "Ice hockey",
+                39 to "Ice skating",
+                44 to "Martial arts",
+                46 to "Paddling",
+                47 to "Paragliding",
+                48 to "Pilates",
+                50 to "Racquetball",
+                51 to "Rock climbing",
+                52 to "Roller hockey",
+                53 to "Rowing",
+                54 to "Rowing machine",
+                55 to "Rugby",
+                56 to "Running",
+                57 to "Treadmill running",
+                58 to "Sailing",
+                59 to "Scuba diving",
+                60 to "Skating",
+                61 to "Skiing",
+                62 to "Snowboarding",
+                63 to "Snowshoeing",
+                64 to "Soccer",
+                65 to "Softball",
+                66 to "Squash",
+                68 to "Stair climbing",
+                69 to "Stair climbing machine",
+                70 to "Strength training",
+                71 to "Stretching",
+                72 to "Surfing",
+                73 to "Open water swimming",
+                74 to "Pool swimming",
+                75 to "Table tennis",
+                76 to "Tennis",
+                78 to "Volleyball",
+                79 to "Walking",
+                80 to "Water polo",
+                81 to "Weightlifting",
+                82 to "Wheelchair",
+                83 to "Yoga",
+            )
+
+        expected.forEach { (id, name) -> assertEquals("exercise type id $id", name, exerciseTypeToString(id)) }
     }
 
     @Test
-    fun `exerciseTypeToString middle 20 known values`() {
-        assertEquals("Frisbee", exerciseTypeToString(20))
-        assertEquals("General workout", exerciseTypeToString(21))
-        assertEquals("Golf", exerciseTypeToString(22))
-        assertEquals("Breathing exercises", exerciseTypeToString(23))
-        assertEquals("Gymnastics", exerciseTypeToString(24))
-        assertEquals("Handball", exerciseTypeToString(25))
-        assertEquals("HIIT", exerciseTypeToString(26))
-        assertEquals("Hiking", exerciseTypeToString(27))
-        assertEquals("Hockey", exerciseTypeToString(28))
-        assertEquals("Figure skating", exerciseTypeToString(29))
-        assertEquals("Jumping jack", exerciseTypeToString(30))
-        assertEquals("Jump rope", exerciseTypeToString(31))
-        assertEquals("Kayaking", exerciseTypeToString(32))
-        assertEquals("Kettlebell", exerciseTypeToString(33))
-        assertEquals("Kickboxing", exerciseTypeToString(34))
-        assertEquals("Kitesurfing", exerciseTypeToString(35))
-        assertEquals("Martial arts", exerciseTypeToString(36))
-        assertEquals("Meditation", exerciseTypeToString(37))
-        assertEquals("MMA", exerciseTypeToString(38))
-        assertEquals("P90X", exerciseTypeToString(39))
+    fun `exerciseTypeToString decodes the ids from the bug report`() {
+        // Sessions exported by third-party apps (Hevy) that were labelled wrongly.
+        assertEquals("Hiking", exerciseTypeToString(37))
+        assertEquals("Running", exerciseTypeToString(56))
+        assertEquals("Strength training", exerciseTypeToString(70))
+        // Types that were missing from the old table altogether.
+        assertEquals("Walking", exerciseTypeToString(79))
+        assertEquals("Water polo", exerciseTypeToString(80))
+        assertEquals("Weightlifting", exerciseTypeToString(81))
+        assertEquals("Wheelchair", exerciseTypeToString(82))
+        assertEquals("Yoga", exerciseTypeToString(83))
     }
 
     @Test
-    fun `exerciseTypeToString middle 20 known values part 2`() {
-        assertEquals("Pilates", exerciseTypeToString(40))
-        assertEquals("Plank", exerciseTypeToString(41))
-        assertEquals("Racquetball", exerciseTypeToString(42))
-        assertEquals("Rock climbing", exerciseTypeToString(43))
-        assertEquals("Roller skating", exerciseTypeToString(44))
-        assertEquals("Rowing", exerciseTypeToString(45))
-        assertEquals("Rowing machine", exerciseTypeToString(46))
-        assertEquals("Rugby", exerciseTypeToString(47))
-        assertEquals("Running", exerciseTypeToString(48))
-        assertEquals("Treadmill", exerciseTypeToString(49))
-        assertEquals("Sailing", exerciseTypeToString(50))
-        assertEquals("Scuba diving", exerciseTypeToString(51))
-        assertEquals("Ice skating", exerciseTypeToString(52))
-        assertEquals("Skiing", exerciseTypeToString(53))
-        assertEquals("Cross-country skiing", exerciseTypeToString(54))
-        assertEquals("Downhill skiing", exerciseTypeToString(55))
-        assertEquals("Kite skiing", exerciseTypeToString(56))
-        assertEquals("Roller skiing", exerciseTypeToString(57))
-        assertEquals("Sledding", exerciseTypeToString(58))
-        assertEquals("Sleep", exerciseTypeToString(59))
+    fun `exerciseTypeToString covers every ExerciseSessionRecord constant`() {
+        // Guards the next Health Connect update: a new EXERCISE_TYPE_* value has to be
+        // added to the mapper instead of silently becoming "Other (n)".
+        val constants =
+            ExerciseSessionRecord::class.java.declaredFields
+                .filter { it.name.startsWith("EXERCISE_TYPE_") && it.type == Int::class.javaPrimitiveType }
+                .map {
+                    it.isAccessible = true
+                    it.getInt(null)
+                }
+
+        assertTrue("expected at least 61 official exercise types, got ${constants.size}", constants.size >= 61)
+        constants.forEach { id ->
+            val name = exerciseTypeToString(id)
+            assertNotNull("exercise type id $id must map to a name", name)
+            assertFalse(
+                "exercise type id $id still falls back to an unknown name: $name",
+                name!!.startsWith("Other ("),
+            )
+        }
     }
 
     @Test
-    fun `exerciseTypeToString last known values`() {
-        assertEquals("Snowboarding", exerciseTypeToString(60))
-        assertEquals("Snowshoeing", exerciseTypeToString(61))
-        assertEquals("Squash", exerciseTypeToString(62))
-        assertEquals("Stair climbing", exerciseTypeToString(63))
-        assertEquals("Stair stepper", exerciseTypeToString(64))
-        assertEquals("Strength training", exerciseTypeToString(65))
-        assertEquals("Stretching", exerciseTypeToString(66))
-        assertEquals("Surfing", exerciseTypeToString(67))
-        assertEquals("Swimming (open water)", exerciseTypeToString(68))
-        assertEquals("Swimming (pool)", exerciseTypeToString(69))
-        assertEquals("Table tennis", exerciseTypeToString(70))
-        assertEquals("Tennis", exerciseTypeToString(71))
-        assertEquals("Upper body", exerciseTypeToString(72))
-        assertEquals("Volleyball", exerciseTypeToString(73))
-        assertEquals("Walking", exerciseTypeToString(74))
-        assertEquals("Water polo", exerciseTypeToString(75))
-        assertEquals("Weightlifting", exerciseTypeToString(76))
-        assertEquals("Wheelchair", exerciseTypeToString(77))
-        assertEquals("Yoga", exerciseTypeToString(78))
-    }
-
-    @Test
-    fun `exerciseTypeToString unknown value returns Other`() {
-        assertEquals("Other (79)", exerciseTypeToString(79))
-        assertEquals("Other (1000)", exerciseTypeToString(1000))
-        assertEquals("Other (-1)", exerciseTypeToString(-1))
+    fun `exerciseTypeToString ids that do not exist return Other`() {
+        for (id in listOf(1, 3, 7, 12, 17, 45, 67, 77, 84, 1000, -1)) {
+            assertEquals("Other ($id)", exerciseTypeToString(id))
+        }
     }
 }

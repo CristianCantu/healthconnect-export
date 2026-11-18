@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Exercise type names came from a dense table, not from Health Connect's ids (#84):** 54 of the 61 official `ExerciseSessionRecord` ids were shifted by the gaps in the platform list (a `56 Running` session was exported as "Kite skiing", `70 Strength training` as "Table tennis", `37 Hiking` as "Meditation"), five ids (`79 Walking`, `80 Water polo`, `81 Weightlifting`, `82 Wheelchair`, `83 Yoga`) were missing and 18 ids that do not exist were invented. The mapper now follows the platform constants one-to-one and unknown ids fall back to `Other (<id>)` instead of losing the number. New data only — files exported before this fix keep their old labels
+
 ---
 
 ## [1.11] — 2026-11-18
