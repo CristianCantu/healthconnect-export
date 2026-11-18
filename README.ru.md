@@ -247,6 +247,31 @@ apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
 # SHA-1: 2abfa4ca625978a25d78fd742dcbca07d2374272
 ```
 
+### Почему релизный APK не может войти в Google
+
+APK на странице релизов подписан собственным релизным ключом проекта, и его SHA-1 зарегистрирован в том Cloud-проекте — но приложение запрашивает `https://www.googleapis.com/auth/drive.file`, а Google относит этот scope к **restricted**. Раздавать restricted-scope произвольным пользователям можно только после OAuth-верификации, а для Drive она включает **ежегодную оценку безопасности (CASA) в авторизованной лаборатории за счёт разработчика**, плюс опубликованную политику приватности и подтверждённый домен. Без этого экран согласия остаётся в режиме **Testing**, куда допускаются только аккаунты из списка *test users* (до 100) — все остальные получают ошибку `[28444] Developer console is not set up correctly` из [issue #89](https://github.com/kas-cor/healthconnect-export/issues/89), какой бы SHA-1 ни был зарегистрирован. Проект — личный и открытый по исходникам, поэтому релиз выходит без входа в Google Drive.
+
+### Сборка со своими данными Google (личное использование)
+
+Бесплатно, без верификации, ~15 минут:
+
+1. **Что нужно** — JDK 21 + Android SDK (или Android Studio); `git clone https://github.com/kas-cor/healthconnect-export`
+2. **Cloud-проект** — [создайте свой](https://console.cloud.google.com/projectcreate) и включите **Google Drive API** и **Identity Toolkit API** (APIs & Services → Library)
+3. **Экран согласия OAuth** — тип пользователей **External**, статус публикации **Testing**; добавьте свой Google-аккаунт в **Test users**; scope `https://www.googleapis.com/auth/drive.file`. Режим Testing не требует верификации, но пускает только тестовых пользователей, а выданный доступ живёт ~7 дней — диалог согласия для Drive может появляться раз в неделю
+4. **Два OAuth-клиента** (Credentials → Create credentials → OAuth client ID):
+   - **Android** — пакет `com.healthconnect.export` (оставьте `applicationId` в `app/build.gradle.kts` как есть либо зарегистрируйте свой пакет и поменяйте его) + **SHA-1 ключа, которым будете подписывать**
+   - **Web application** — redirect URIs не нужны; скопируйте его client ID
+5. **Направьте приложение в свой проект** — вставьте client ID **веб**-клиента в `defaultConfig` файла `app/build.gradle.kts`:
+   ```kotlin
+   buildConfigField("String", "GOOGLE_CLIENT_ID", "\"<YOUR_WEB_CLIENT_ID>.apps.googleusercontent.com\"")
+   ```
+6. **Подпишите своим ключом** — либо
+   - *debug-сборка*: `./gradlew assembleDebug`, установите `app/build/outputs/apk/debug/app-debug.apk` и зарегистрируйте **debug**-SHA-1 из `./gradlew signingReport` (вариант `debug`); либо
+   - *release-сборка*: `keytool -genkeypair -v -keystore healthconnect-release.jks -alias healthconnect -keyalg RSA -keysize 2048 -validity 10000`, затем `KEYSTORE_PASSWORD=… ./gradlew assembleRelease` — `signingConfigs.release` уже ждёт `healthconnect-release.jks` в корне репозитория и читает `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` из переменных окружения
+7. **Зарегистрируйте отпечаток** — `./gradlew signingReport` (или `keytool -list -v -keystore healthconnect-release.jks -alias healthconnect`) → вставьте SHA-1 в **Android**-клиент. Консоль принимает его с двоеточиями и без; подождите пару минут, пока изменение разойдётся
+8. **Запуск** — установите APK, выдайте разрешения Health Connect, откройте вкладку «Интеграции» → **Войти в Google**. Согласие на Drive появится при первой синхронизации, а `drive.file` ограничивает приложение только теми файлами, которые оно создало само
+9. **Если не работает** — `[28444]` / «not registered» значит, что SHA-1 или пакет установленного APK не совпадает с Android-клиентом (проверьте `apksigner verify --print-certs <apk>`); `access_denied` / «app not verified» — аккаунта нет в **Test users**; ошибки Drive при синхронизации — в вашем проекте не включён Drive API
+
 ## Webhook 📡
 
 После экспорта данные о здоровье можно отправить на любой URL через POST-запрос.
