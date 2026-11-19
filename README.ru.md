@@ -4,10 +4,10 @@
 [![Coverage](https://raw.githubusercontent.com/kas-cor/healthconnect-export/main/badges/coverage.svg)](https://github.com/kas-cor/healthconnect-export/actions/workflows/build-apk.yml)
 [![Branches](https://raw.githubusercontent.com/kas-cor/healthconnect-export/main/badges/branches.svg)](https://github.com/kas-cor/healthconnect-export/actions/workflows/build-apk.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Kotlin](https://img.shields.io/badge/kotlin-2.4.20-purple)](https://kotlinlang.org)
-[![Версия](https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.11-blue)](CHANGELOG.md)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.4.21-purple)](https://kotlinlang.org)
+[![Версия](https://img.shields.io/badge/%D0%B2%D0%B5%D1%80%D1%81%D0%B8%D1%8F-1.13-blue)](CHANGELOG.md)
 [![Release](https://img.shields.io/github/v/release/kas-cor/healthconnect-export)](https://github.com/kas-cor/healthconnect-export/releases)
-[![English](https://img.shields.io/badge/README-English-blue)](README.md)
+[![Английский](https://img.shields.io/badge/README-English-blue)](README.md)
 
 > Бейдж покрытия автообновляется при каждом пуше в `main` через CI.
 
@@ -152,7 +152,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## CI/CD 🚀
 
-Workflow: `.github/workflows/build-apk.yml`
+Сценарий: `.github/workflows/build-apk.yml`
 
 ### Триггеры
 
@@ -198,9 +198,9 @@ Push → Lint + Ktlint → Модульные тесты
 | `HealthConnectExport-debug` | 7 дней | Debug APK |
 | `HealthConnectExport-release` | 30 дней | Подписанный release APK (только при пуше тега) |
 
-### GitHub Secrets
+### Секреты GitHub
 
-| Secret | Описание |
+| Секрет | Описание |
 |---|---|
 | `KEYSTORE_BASE64` | `healthconnect-release.jks` в base64 |
 | `KEYSTORE_PASSWORD` | Пароль keystore (используется и как пароль ключа; псевдоним по умолчанию — `healthconnect`) |
@@ -213,7 +213,7 @@ git push origin v1.13
 # CI: увеличить версию → собрать → создать GitHub Release
 ```
 
-[Workflow](.github/workflows/build-apk.yml)
+[Сценарий](.github/workflows/build-apk.yml)
 
 ## Настройка Google Drive 🔐
 
@@ -221,7 +221,7 @@ git push origin v1.13
 
 | Тип | Client ID | Назначение |
 |---|---|---|
-| **Android** (OAuth) | `730530422387-oaffqtrvfd1rqr6jn1uq8791mgbbpmlj` | Проверка SHA-1 + package name (Google Play Services) |
+| **Android** (OAuth) | `730530422387-oaffqtrvfd1rqr6jn1uq8791mgbbpmlj` | Проверка SHA-1 и имени пакета (Google Play Services) |
 | **Web application** (OAuth) | `730530422387-dveo97h089iesh4etmj74q9dn8j221f1` | `setServerClientId()` в `BuildConfig.GOOGLE_CLIENT_ID` |
 
 ### SHA-1 отпечатки
@@ -231,7 +231,7 @@ git push origin v1.13
 | **Release** | `2A:BF:A4:CA:62:59:78:A2:5D:78:FD:74:2D:CB:CA:07:D2:37:42:72` |
 | **Debug** | `8B:BB:D1:45:E2:61:5B:02:57:E1:3F:26:29:1A:AF:F0:2C:40:77:73` |
 
-### OAuth consent screen
+### Экран согласия OAuth (OAuth consent screen)
 
 1. Откройте [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent)
 2. Тип: **External** → **Testing** (не требуется верификация)
@@ -403,7 +403,7 @@ Client ID — единственное значение проекта, кото
 - Названия типов данных (Шаги, Пульс, Сон, Калории, Дистанция и т.д.)
 - Интерфейс экспорта и расписания
 - Сообщения об ошибках и статусе
-- Google Drive, Webhook
+- Google Drive, Webhook (вебхук)
 - JSON просмотрщик, сводка экспорта
 - Все системные уведомления (WorkManager)
 

@@ -199,6 +199,29 @@ def check_readme_sync(project_root: Path) -> list[str]:
     return warnings
 
 
+def check_english_readme(project_root: Path) -> list[str]:
+    """Ensure the English README carries no Russian prose.
+
+    Code fences are skipped: snippets legitimately contain Russian (e.g. the
+    `AppLocale.RU("ru", "Русский")` example). Everything else — headings, prose,
+    table cells — has to be English.
+    """
+    path = project_root / "README.md"
+    if not path.exists():
+        return []
+    errors = []
+    in_code = False
+    cyrillic = re.compile(r"[А-Яа-яЁё]")
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if line.strip().startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code or not cyrillic.search(line):
+            continue
+        errors.append(f"{path}:{number}: Russian text in the English README: {line.strip()[:60]}")
+    return errors
+
+
 def main():
     project_root = Path(__file__).resolve().parent.parent
     en_xml = project_root / "app" / "src" / "main" / "res" / "values" / "strings.xml"
@@ -231,6 +254,9 @@ def main():
         all_errors.append(
             f"{ru_xml}: Missing translations for keys: {', '.join(sorted(missing_keys))}"
         )
+
+    # The English README must not carry Russian prose (only code fences may)
+    all_errors.extend(check_english_readme(project_root))
 
     # Check README sync (warnings only, non-fatal)
     all_warnings.extend(check_readme_sync(project_root))

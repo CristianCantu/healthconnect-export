@@ -4,10 +4,10 @@
 [![Coverage](https://raw.githubusercontent.com/kas-cor/healthconnect-export/main/badges/coverage.svg)](https://github.com/kas-cor/healthconnect-export/actions/workflows/build-apk.yml)
 [![Branches](https://raw.githubusercontent.com/kas-cor/healthconnect-export/main/badges/branches.svg)](https://github.com/kas-cor/healthconnect-export/actions/workflows/build-apk.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Kotlin](https://img.shields.io/badge/kotlin-2.4.20-purple)](https://kotlinlang.org)
-[![Version](https://img.shields.io/badge/version-1.11-blue)](CHANGELOG.md)
+[![Kotlin](https://img.shields.io/badge/kotlin-2.4.21-purple)](https://kotlinlang.org)
+[![Version](https://img.shields.io/badge/version-1.13-blue)](CHANGELOG.md)
 [![Release](https://img.shields.io/github/v/release/kas-cor/healthconnect-export)](https://github.com/kas-cor/healthconnect-export/releases)
-[![Русский](https://img.shields.io/badge/README-%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-blue)](README.ru.md)
+[![Russian](https://img.shields.io/badge/README-Russian-blue)](README.ru.md)
 
 > Coverage badge auto-updates on every push to `main` via CI.
 
@@ -66,18 +66,18 @@ MainActivity → ExportScreen (Compose) → ExportViewModel
 
 ### Build script (`./build.sh`)
 
-Скрипт для сборки, установки, запуска и тестирования приложения.
+Builds, installs, launches and tests the app.
 
-| Flag | Описание |
+| Flag | Description |
 |---|---|
-| *(без флагов)* | Собрать debug APK |
-| `--run` | Собрать debug APK, установить на устройство и запустить |
-| `--release` | Собрать release APK (подпись продакшн-ключом или debug-ключом) |
-| `--install [apk]` | Установить APK на устройство (по умолч. debug APK) |
-| `--pull` | Вытянуть экспортированные JSON-файлы (`health_*.json`) с устройства |
-| `--test <url> [token]` | Отправить тестовый POST с демо-данными Health Connect на webhook |
-| `--logs` | Показать logcat, отфильтрованный по приложению (`ExportScreen`, `HealthConnect`, `DriveManager`, etc.) |
-| `--help` | Показать справку |
+| *(no flags)* | Build the debug APK |
+| `--run` | Build the debug APK, install it on the device and launch it |
+| `--release` | Build the release APK (signed with the production key, or debug-signed) |
+| `--install [apk]` | Install an APK on the device (the debug APK by default) |
+| `--pull` | Pull the exported JSON files (`health_*.json`) from the device |
+| `--test <url> [token]` | Send a test POST with demo Health Connect data to the webhook |
+| `--logs` | Show logcat filtered by the app (`ExportScreen`, `HealthConnect`, `DriveManager`, etc.) |
+| `--help` | Show help |
 
 ```bash
 # Debug build only
@@ -217,12 +217,12 @@ git push origin v1.13
 
 ## Google Drive setup 🔐
 
-Для входа в Google (Credential Manager) и доступа к Drive нужно **два** OAuth Client ID в одном Google Cloud Project:
+Signing in to Google (Credential Manager) and reading Drive needs **two** OAuth client IDs in one Google Cloud project:
 
-| Тип | Client ID | Назначение |
+| Type | Client ID | Purpose |
 |---|---|---|
-| **Android** (OAuth) | `730530422387-oaffqtrvfd1rqr6jn1uq8791mgbbpmlj` | Проверка SHA-1 + package name (Google Play Services) |
-| **Web application** (OAuth) | `730530422387-dveo97h089iesh4etmj74q9dn8j221f1` | `setServerClientId()` в `BuildConfig.GOOGLE_CLIENT_ID` |
+| **Android** (OAuth) | `730530422387-oaffqtrvfd1rqr6jn1uq8791mgbbpmlj` | SHA-1 + package name check (Google Play services) |
+| **Web application** (OAuth) | `730530422387-dveo97h089iesh4etmj74q9dn8j221f1` | `setServerClientId()` via `BuildConfig.GOOGLE_CLIENT_ID` (default only — see below) |
 
 ### SHA-1 fingerprints
 
@@ -233,10 +233,11 @@ git push origin v1.13
 
 ### OAuth consent screen
 
-1. Откройте [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent)
-2. Тип: **External** → **Testing** (не требуется верификация)
-3. Добавьте **Test users** — свой email
-4. На шаге **Scopes** добавьте `https://www.googleapis.com/auth/drive.file`
+1. Open the [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent)
+2. User type: **External** → publishing status **Testing** (no verification required)
+3. Add **Test users** — your own email
+4. On the **Scopes** step add `https://www.googleapis.com/auth/drive.file`
+5. In the app: **Integrations** tab → **Google Cloud project** → paste your Web client ID (see below)
 
 ### Required APIs
 
