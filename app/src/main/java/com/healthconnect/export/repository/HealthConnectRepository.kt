@@ -6,8 +6,8 @@ import android.util.Log
 import androidx.activity.result.contract.ActivityResultContract
 import androidx.annotation.VisibleForTesting
 import androidx.health.connect.client.HealthConnectClient
-import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.HealthConnectFeatures
+import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.*
 import androidx.health.connect.client.records.Record
@@ -457,14 +457,16 @@ class HealthConnectRepository(
             bodyPosition = position,
             recordsCount = records.size,
             readings =
-                records.sortedBy { it.time }.map {
-                    BloodPressureReading(
-                        time = localIso(it.time, it.zoneOffset),
-                        systolicMmHg = it.systolic.inMillimetersOfMercury,
-                        diastolicMmHg = it.diastolic.inMillimetersOfMercury,
-                        source = sourceOf(it),
-                    )
-                }.capReadings(),
+                records
+                    .sortedBy { it.time }
+                    .map {
+                        BloodPressureReading(
+                            time = localIso(it.time, it.zoneOffset),
+                            systolicMmHg = it.systolic.inMillimetersOfMercury,
+                            diastolicMmHg = it.diastolic.inMillimetersOfMercury,
+                            source = sourceOf(it),
+                        )
+                    }.capReadings(),
         )
     }
 
@@ -479,14 +481,16 @@ class HealthConnectRepository(
             mealType = mealType,
             recordsCount = records.size,
             readings =
-                records.sortedBy { it.time }.map {
-                    BloodGlucoseReading(
-                        time = localIso(it.time, it.zoneOffset),
-                        levelMmolPerL = it.level.inMillimolesPerLiter,
-                        levelMgPerDl = it.level.inMilligramsPerDeciliter,
-                        source = sourceOf(it),
-                    )
-                }.capReadings(),
+                records
+                    .sortedBy { it.time }
+                    .map {
+                        BloodGlucoseReading(
+                            time = localIso(it.time, it.zoneOffset),
+                            levelMmolPerL = it.level.inMillimolesPerLiter,
+                            levelMgPerDl = it.level.inMilligramsPerDeciliter,
+                            source = sourceOf(it),
+                        )
+                    }.capReadings(),
         )
     }
 
@@ -601,13 +605,13 @@ class HealthConnectRepository(
 
     // ===== Batch period reader =====
 
+    // ── Type handler for data-type-agnostic batch processing ──
+
     /**
      * Reads health data for an entire period in batch mode.
      * For each data type, makes ONE API call to read ALL records for the full period,
      * then groups results by day. This avoids rate limiting from N×M calls (N=days, M=types).
      */
-    // ── Type handler for data-type-agnostic batch processing ──
-
     private class TypeHandler(
         val recordClass: KClass<out Record>,
         val timeSelector: (Any) -> Instant,

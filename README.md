@@ -35,6 +35,7 @@ Android app for exporting Google Health Connect data to JSON format with optiona
 - **Tabbed navigation** — Export / History / Integrations / Schedule / Settings tabs
 - **Update check** — GitHub release check with notification dot in the app bar + "What's new" dialog
 - **Google Drive sign-in** — Credential Manager authentication, previous account restored at app start; the Drive scope is authorized lazily on first sync
+- **Own Google Cloud project** — the Integrations tab takes your own OAuth client ID at runtime (it shows the package name and the APK's signing SHA-1 to register), so Drive sign-in works without rebuilding the APK
 - **History management** — expandable "Show all files" list (any file opens), file count + total size header
 - **File actions** — share any exported file via the system share sheet, or delete it (with confirmation)
 - **Export format** — JSON or CSV (one row per day, RFC 4180 escaping)
@@ -108,7 +109,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Testing 🧪
 
 ```bash
-# Run all unit tests (436 tests)
+# Run all unit tests (457 tests)
 ./gradlew testDebugUnitTest
 
 # Coverage report + gate check
@@ -116,14 +117,16 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 # Open: app/build/reports/jacoco/jacocoTestReport/html/index.html
 ```
 
-**Test suites (436 total):**
+**Test suites (457 total):**
 
 | File | Tests | Scope |
 |---|---|---|
-| `ExportViewModelTest` | 54 | ViewModel states: export, webhook, Drive sign-in/session restore, signed-out flag, Drive scope consent, update check, export format, schedule hour, retention, file actions |
+| `ExportViewModelTest` | 59 | ViewModel states: export, webhook, Drive sign-in/session restore, signed-out flag, Drive scope consent, custom Google client ID, update check, export format, schedule hour, retention, file actions |
 | `WebhookRepositoryTest` | 42 | sendRecords via local HTTP server (success/error/auth/special chars/JSON body) + URL validation + retryability of HTTP codes |
 | `DataModelsSerializationTest` | 45 | Roundtrip serialization: DailyHealthRecord, ExportConfig (incl. format/hour), enums, SpeedData, sourceDisplayName, `hasAnyData()`, detailed readings |
 | `HealthConnectReadingsTest` | 8 | Detailed readings: timestamp format/offset, ordering across zone offsets, 2000-per-day payload cap |
+| `GoogleClientIdStoreTest` | 11 | Custom OAuth client ID: bundled fallback, normalization, override lifecycle, validation |
+| `AppSignatureTest` | 5 | Signing SHA-1 shown in the UI: formatting, missing package, missing signer |
 | `LocalExportRepositoryTest` | 31 | File operations: save (JSON/CSV), list, cleanup, delete both formats, filename format |
 | `HighlightJsonSyntaxTest` | 31 | JSON syntax highlighting: strings, numbers, booleans, null, nested objects, arrays, escaped quotes |
 | `DailyExportWorkerTest` | 32 | doWork() (success/no data/permission handling/4xx not retried/exceptions) + schedule() (daily/weekly/manual/cancel, schedule hour) |
@@ -205,8 +208,8 @@ On push to `main`, a coverage badge is auto-committed to `badges/`.
 ### Release
 
 ```bash
-git tag v1.12
-git push origin v1.12
+git tag v1.13
+git push origin v1.13
 # CI: bump version → build → create GitHub Release
 ```
 
@@ -251,25 +254,35 @@ apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
 
 The APK on the Releases page is signed with the project's own release key, and its SHA-1 is registered in that Cloud project — but the app asks for `https://www.googleapis.com/auth/drive.file`, which Google classifies as a **restricted scope**. Serving a restricted scope to arbitrary users requires OAuth verification, and for Drive that means an **annual security assessment (CASA) done by an authorized lab and paid by the developer**, plus a published privacy policy and a verified domain. Without it the consent screen stays in **Testing**, which only admits the accounts listed as test users (up to 100) — everyone else gets the `[28444] Developer console is not set up correctly` error from [issue #89](https://github.com/kas-cor/healthconnect-export/issues/89), whatever SHA-1 is registered. This is a personal, source-available tool, so the release ships without Google Drive sign-in.
 
-### Build with your own Google credentials (personal use)
+### Use your own Google Cloud project (no rebuild)
 
-Free, no verification needed, ~15 minutes:
+The client ID is the only project-specific value the app itself consumes, so the released APK can be pointed at your own project from the UI:
+
+1. Open the **Integrations** tab → **Google Cloud project** → *Use my own*. Copy the **package name** and the **signing SHA-1** shown there — they are read from the installed APK, so they are always the ones Google will check.
+2. In your own [Cloud project](https://console.cloud.google.com/projectcreate): enable **Google Drive API** and **Identity Toolkit API**, and set the OAuth consent screen to **External** / **Testing** with your account as a **test user** and the scope `https://www.googleapis.com/auth/drive.file`.
+3. Create **two** OAuth clients (Credentials → Create credentials → OAuth client ID):
+   - **Android** — the package name and SHA-1 from step 1;
+   - **Web application** — no redirect URIs; copy its client ID.
+4. Paste that Web client ID into the field and press **Save**. The app signs out the account of the bundled project (its tokens belong to another project) and the next **Sign in to Google** goes to your project.
+5. **Reset** returns to the bundled project at any time.
+
+Nothing leaves the device except the calls to Google. Tests are limited to *test users* in Testing mode and the grant expires after ~7 days, so the Drive consent may reappear weekly; that is the price of not going through Google's verification.
+
+### Build with your own Google credentials
+
+Rebuilding bakes the client ID in, which is handy for your own fork:
 
 1. **Prerequisites** — JDK 21 + Android SDK (or Android Studio); `git clone https://github.com/kas-cor/healthconnect-export`
-2. **Cloud project** — [create one](https://console.cloud.google.com/projectcreate), then enable **Google Drive API** and **Identity Toolkit API** (APIs & Services → Library)
-3. **OAuth consent screen** — user type **External**, publishing status **Testing**; add your own Google account under **Test users**; scope `https://www.googleapis.com/auth/drive.file`. Testing mode needs no verification, but it only admits test users and the grant expires after ~7 days, so the Drive consent dialog may reappear weekly
-4. **Two OAuth clients** (Credentials → Create credentials → OAuth client ID):
-   - **Android** — package `com.healthconnect.export` (keep the `applicationId` in `app/build.gradle.kts`, or register your own package and change it) + the **SHA-1 of the key you will sign with**
-   - **Web application** — no redirect URIs needed; copy its client ID
-5. **Point the app at your project** — put the *Web* client ID into `defaultConfig` in `app/build.gradle.kts`:
+2. **Cloud project** — [create one](https://console.cloud.google.com/projectcreate), enable **Google Drive API** and **Identity Toolkit API**
+3. **OAuth consent screen** — **External** / **Testing**, your account under **Test users**, scope `.../auth/drive.file`
+4. **Two OAuth clients** — an **Android** one for `com.healthconnect.export` (keep the `applicationId`, or register your own package and change it) with the SHA-1 of the key you sign with, and a **Web application** one
+5. **Point the app at your project** — `defaultConfig` in `app/build.gradle.kts`:
    ```kotlin
    buildConfigField("String", "GOOGLE_CLIENT_ID", "\"<YOUR_WEB_CLIENT_ID>.apps.googleusercontent.com\"")
    ```
-6. **Sign with your own key** — either
-   - *debug build*: `./gradlew assembleDebug`, install `app/build/outputs/apk/debug/app-debug.apk`, register the **debug** SHA-1 from `./gradlew signingReport` (Variant `debug`); or
-   - *release build*: `keytool -genkeypair -v -keystore healthconnect-release.jks -alias healthconnect -keyalg RSA -keysize 2048 -validity 10000`, then `KEYSTORE_PASSWORD=… ./gradlew assembleRelease` — `signingConfigs.release` already expects `healthconnect-release.jks` at the repo root and reads `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` from the environment
-7. **Register the fingerprint** — `./gradlew signingReport` (or `keytool -list -v -keystore healthconnect-release.jks -alias healthconnect`) → paste the SHA-1 into the **Android** OAuth client. Console accepts it with or without colons; allow a few minutes to propagate
-8. **Run** — install the APK, grant Health Connect permissions, open the Integrations tab → **Sign in to Google**. The Drive consent appears on the first sync, and `drive.file` limits the app to the files it created itself
+6. **Sign with your own key** — either a debug build (`./gradlew assembleDebug`, register the **debug** SHA-1 from `./gradlew signingReport`), or `keytool -genkeypair -v -keystore healthconnect-release.jks -alias healthconnect -keyalg RSA -keysize 2048 -validity 10000` followed by `KEYSTORE_PASSWORD=… ./gradlew assembleRelease` — `signingConfigs.release` already expects `healthconnect-release.jks` at the repo root and reads `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` from the environment
+7. **Register the fingerprint** — `./gradlew signingReport` (or `keytool -list -v -keystore healthconnect-release.jks -alias healthconnect`) → paste the SHA-1 into the **Android** OAuth client; allow a few minutes to propagate
+8. **Run** — install, grant Health Connect permissions, Integrations tab → **Sign in to Google**
 9. **Troubleshooting** — `[28444]` / "not registered" means the installed APK's SHA-1 or package differs from the Android client (check with `apksigner verify --print-certs <apk>`); `access_denied` / "app not verified" means your account is not in **Test users**; Drive errors on sync mean the Drive API is disabled in your project
 
 ## Webhook 📡
@@ -375,7 +388,7 @@ Blood pressure, blood glucose, oxygen saturation, weight, body fat and heart rat
 
 - **Languages**: English (default), Russian
 - **Locale switching**: Via Settings tab → Language
-- **Coverage**: All 220 strings translated in `values-ru/strings.xml`
+- **Coverage**: All 236 strings translated in `values-ru/strings.xml`
 - **Format safety**: All `%d`, `%s`, `%.1f` placeholders match between locales
 - **Persistence**: Selected locale saved in SharedPreferences
 
@@ -397,7 +410,7 @@ Every UI string:
 ### Technical details
 
 - Translation file: `app/src/main/res/values-ru/strings.xml`
-- All **220 strings** translated — no English string is left in the Russian locale
+- All **236 strings** translated — no English string is left in the Russian locale
 - Format placeholders (`%d`, `%s`, `%.1f`) match the English version exactly, so switching the language cannot crash the app
 - The choice is stored in `SharedPreferences` and restored after a restart
 - Health data is unaffected: the exported JSON uses English keys regardless of the UI language
@@ -523,6 +536,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 | Version | Date | Highlights |
 |---|---|---|
+| [v1.13](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.13) | 2026-11-18 | Your own Google Cloud project set inside the app (no rebuild), package + signing SHA-1 shown in the UI, 457 tests |
 | [v1.12](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.12) | 2026-11-18 | Detailed readings per day (blood pressure, glucose, SpO₂, weight, body fat, heart rate) next to the aggregates, exercise type names now follow Health Connect's own ids, 436 tests |
 | [v1.11](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.11) | 2026-11-18 | Scheduled delivery fixed for real: Health Connect background-read permission, failure notification, 4xx without retry, empty days no longer swallow the catch-up point, 426 tests |
 | [v1.10](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.10) | 2026-09-27 | Google Sign-In migrated to Credential Manager, Drive scope requested lazily, catch-up of undelivered days on app open, 397 tests |

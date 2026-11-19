@@ -35,6 +35,7 @@ Android-приложение для экспорта данных Google Health 
 - **Навигация по вкладкам** — Экспорт / История / Интеграции / Расписание / Настройки
 - **Проверка обновлений** — проверка релизов GitHub с точкой-уведомлением в шапке + диалог «Что нового»
 - **Вход в Google Drive** — аутентификация через Credential Manager, прошлый аккаунт восстанавливается при запуске; доступ к Drive (scope) запрашивается лениво при первой синхронизации
+- **Свой проект Google Cloud** — вкладка «Интеграции» принимает client ID вашего OAuth-клиента прямо в приложении (там же показаны имя пакета и SHA-1 подписи APK для регистрации), поэтому вход в Drive работает без пересборки APK
 - **Управление историей** — раскрывающийся список «Показать все файлы» (открывается любой файл), счётчик файлов и общий размер в шапке
 - **Действия с файлами** — поделиться любым экспортированным файлом через системный share-меню или удалить (с подтверждением)
 - **Формат экспорта** — JSON или CSV (одна строка на день, экранирование RFC 4180)
@@ -108,7 +109,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Тестирование 🧪
 
 ```bash
-# Запустить все модульные тесты (436)
+# Запустить все модульные тесты (457)
 ./gradlew testDebugUnitTest
 
 # Отчёт покрытия + проверка порогов
@@ -116,14 +117,16 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 # Открыть: app/build/reports/jacoco/jacocoTestReport/html/index.html
 ```
 
-**Наборы тестов (всего 436):**
+**Наборы тестов (всего 457):**
 
 | Файл | Тестов | Что проверяет |
 |---|---|---|
-| `ExportViewModelTest` | 54 | Состояния ViewModel: экспорт, webhook, вход в Drive/восстановление сессии, флаг sign-out, согласие на Drive-скоуп, проверка обновлений, формат, час расписания, retention, действия с файлами |
+| `ExportViewModelTest` | 59 | Состояния ViewModel: экспорт, webhook, вход в Drive/восстановление сессии, флаг sign-out, согласие на Drive-скоуп, проверка обновлений, формат, час расписания, retention, действия с файлами |
 | `WebhookRepositoryTest` | 42 | sendRecords через локальный HTTP-сервер (успех/ошибка/авторизация/спецсимволы/JSON-тело) + валидация URL + retry-политика по HTTP-кодам |
 | `DataModelsSerializationTest` | 45 | Roundtrip-сериализация: DailyHealthRecord, ExportConfig (включая формат/час), enum-ы, SpeedData, sourceDisplayName, `hasAnyData()`, детальные измерения |
 | `HealthConnectReadingsTest` | 8 | Детальные измерения: формат времени и смещение, порядок при разных зонах, лимит 2000 замеров в сутки |
+| `GoogleClientIdStoreTest` | 11 | Свой OAuth client ID: встроенный по умолчанию, нормализация, жизненный цикл переопределения, валидация |
+| `AppSignatureTest` | 5 | SHA-1 подписи в UI: форматирование, отсутствие пакета, отсутствие подписанта |
 | `LocalExportRepositoryTest` | 31 | Файловые операции: сохранение (JSON/CSV), список, очистка, удаление обоих форматов, формат имени |
 | `HighlightJsonSyntaxTest` | 31 | Подсветка синтаксиса JSON: строки, числа, boolean, null, вложенные объекты, массивы, экранированные кавычки |
 | `DailyExportWorkerTest` | 32 | doWork() (успех/нет данных/обработка разрешений/4xx без retry/исключения) + schedule() (daily/weekly/manual/cancel, час расписания) |
@@ -205,8 +208,8 @@ Push → Lint + Ktlint → Модульные тесты
 ### Релиз
 
 ```bash
-git tag v1.12
-git push origin v1.12
+git tag v1.13
+git push origin v1.13
 # CI: увеличить версию → собрать → создать GitHub Release
 ```
 
@@ -251,26 +254,36 @@ apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
 
 APK на странице релизов подписан собственным релизным ключом проекта, и его SHA-1 зарегистрирован в том Cloud-проекте — но приложение запрашивает `https://www.googleapis.com/auth/drive.file`, а Google относит этот scope к **restricted**. Раздавать restricted-scope произвольным пользователям можно только после OAuth-верификации, а для Drive она включает **ежегодную оценку безопасности (CASA) в авторизованной лаборатории за счёт разработчика**, плюс опубликованную политику приватности и подтверждённый домен. Без этого экран согласия остаётся в режиме **Testing**, куда допускаются только аккаунты из списка *test users* (до 100) — все остальные получают ошибку `[28444] Developer console is not set up correctly` из [issue #89](https://github.com/kas-cor/healthconnect-export/issues/89), какой бы SHA-1 ни был зарегистрирован. Проект — личный и открытый по исходникам, поэтому релиз выходит без входа в Google Drive.
 
-### Сборка со своими данными Google (личное использование)
+### Свой проект Google Cloud (без пересборки)
 
-Бесплатно, без верификации, ~15 минут:
+Client ID — единственное значение проекта, которое нужно самому приложению, поэтому релизный APK можно направить в свой проект прямо из интерфейса:
+
+1. Вкладка **«Интеграции»** → **«Проект Google Cloud»** → *«Свой проект»*. Скопируйте показанные там **имя пакета** и **SHA-1 подписи** — они читаются из установленного APK, то есть ровно те, что будет проверять Google.
+2. В своём [Cloud-проекте](https://console.cloud.google.com/projectcreate) включите **Google Drive API** и **Identity Toolkit API**, а экран согласия OAuth переведите в режим **External** / **Testing**, добавив свой аккаунт в **Test users** и scope `https://www.googleapis.com/auth/drive.file`.
+3. Создайте **два** OAuth-клиента (Credentials → Create credentials → OAuth client ID):
+   - **Android** — с именем пакета и SHA-1 из шага 1;
+   - **Web application** — без redirect URIs; скопируйте его client ID.
+4. Вставьте этот client ID в поле и нажмите **«Сохранить»**. Аккаунт встроенного проекта будет отключён (его токены принадлежат другому проекту), и следующая кнопка **«Войти в Google»** пойдёт уже в ваш проект.
+5. **«Сбросить»** в любой момент возвращает встроенный проект.
+
+Наружу не уходит ничего, кроме запросов к Google. В режиме Testing вход доступен только тестовым пользователям, а выданный доступ живёт ~7 дней, поэтому согласие для Drive может запрашиваться раз в неделю — это цена отказа от верификации Google.
+
+### Сборка со своими данными Google
+
+Пересборка «зашивает» client ID внутрь — удобно для собственного форка:
 
 1. **Что нужно** — JDK 21 + Android SDK (или Android Studio); `git clone https://github.com/kas-cor/healthconnect-export`
-2. **Cloud-проект** — [создайте свой](https://console.cloud.google.com/projectcreate) и включите **Google Drive API** и **Identity Toolkit API** (APIs & Services → Library)
-3. **Экран согласия OAuth** — тип пользователей **External**, статус публикации **Testing**; добавьте свой Google-аккаунт в **Test users**; scope `https://www.googleapis.com/auth/drive.file`. Режим Testing не требует верификации, но пускает только тестовых пользователей, а выданный доступ живёт ~7 дней — диалог согласия для Drive может появляться раз в неделю
-4. **Два OAuth-клиента** (Credentials → Create credentials → OAuth client ID):
-   - **Android** — пакет `com.healthconnect.export` (оставьте `applicationId` в `app/build.gradle.kts` как есть либо зарегистрируйте свой пакет и поменяйте его) + **SHA-1 ключа, которым будете подписывать**
-   - **Web application** — redirect URIs не нужны; скопируйте его client ID
-5. **Направьте приложение в свой проект** — вставьте client ID **веб**-клиента в `defaultConfig` файла `app/build.gradle.kts`:
+2. **Cloud-проект** — [создайте свой](https://console.cloud.google.com/projectcreate), включите **Google Drive API** и **Identity Toolkit API**
+3. **Экран согласия OAuth** — **External** / **Testing**, свой аккаунт в **Test users**, scope `.../auth/drive.file`
+4. **Два OAuth-клиента** — **Android** для `com.healthconnect.export` (оставьте `applicationId` как есть либо зарегистрируйте свой пакет и поменяйте его) с SHA-1 вашего ключа подписи, и **Web application**
+5. **Направьте приложение в свой проект** — `defaultConfig` в `app/build.gradle.kts`:
    ```kotlin
    buildConfigField("String", "GOOGLE_CLIENT_ID", "\"<YOUR_WEB_CLIENT_ID>.apps.googleusercontent.com\"")
    ```
-6. **Подпишите своим ключом** — либо
-   - *debug-сборка*: `./gradlew assembleDebug`, установите `app/build/outputs/apk/debug/app-debug.apk` и зарегистрируйте **debug**-SHA-1 из `./gradlew signingReport` (вариант `debug`); либо
-   - *release-сборка*: `keytool -genkeypair -v -keystore healthconnect-release.jks -alias healthconnect -keyalg RSA -keysize 2048 -validity 10000`, затем `KEYSTORE_PASSWORD=… ./gradlew assembleRelease` — `signingConfigs.release` уже ждёт `healthconnect-release.jks` в корне репозитория и читает `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` из переменных окружения
-7. **Зарегистрируйте отпечаток** — `./gradlew signingReport` (или `keytool -list -v -keystore healthconnect-release.jks -alias healthconnect`) → вставьте SHA-1 в **Android**-клиент. Консоль принимает его с двоеточиями и без; подождите пару минут, пока изменение разойдётся
-8. **Запуск** — установите APK, выдайте разрешения Health Connect, откройте вкладку «Интеграции» → **Войти в Google**. Согласие на Drive появится при первой синхронизации, а `drive.file` ограничивает приложение только теми файлами, которые оно создало само
-9. **Если не работает** — `[28444]` / «not registered» значит, что SHA-1 или пакет установленного APK не совпадает с Android-клиентом (проверьте `apksigner verify --print-certs <apk>`); `access_denied` / «app not verified» — аккаунта нет в **Test users**; ошибки Drive при синхронизации — в вашем проекте не включён Drive API
+6. **Подпишите своим ключом** — либо debug-сборка (`./gradlew assembleDebug`, зарегистрируйте **debug**-SHA-1 из `./gradlew signingReport`), либо `keytool -genkeypair -v -keystore healthconnect-release.jks -alias healthconnect -keyalg RSA -keysize 2048 -validity 10000` и затем `KEYSTORE_PASSWORD=… ./gradlew assembleRelease` — `signingConfigs.release` уже ждёт `healthconnect-release.jks` в корне репозитория и читает `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD` из переменных окружения
+7. **Зарегистрируйте отпечаток** — `./gradlew signingReport` (или `keytool -list -v -keystore healthconnect-release.jks -alias healthconnect`) → вставьте SHA-1 в **Android**-клиент; подождите пару минут
+8. **Запуск** — установите, выдайте разрешения Health Connect, вкладка «Интеграции» → **«Войти в Google»**
+9. **Если не работает** — `[28444]` / «not registered» значит, что SHA-1 или пакет установленного APK не совпадает с Android-клиентом (проверьте `apksigner verify --print-certs <apk>`); `access_denied` / «app not verified» — аккаунта нет в **Test users**; ошибки Drive при синхронизации — в проекте не включён Drive API
 
 ## Webhook 📡
 
@@ -375,7 +388,7 @@ APK на странице релизов подписан собственным
 
 - **Языки**: английский (по умолчанию), русский
 - **Переключение языка**: через вкладку «Настройки» → «Язык»
-- **Покрытие**: Все **220 строк** переведены в `values-ru/strings.xml`
+- **Покрытие**: Все **236 строк** переведены в `values-ru/strings.xml`
 - **Безопасность форматов**: все плейсхолдеры `%d`, `%s`, `%.1f` совпадают между языками
 - **Сохранение**: выбранный язык сохраняется в SharedPreferences
 
@@ -397,7 +410,7 @@ APK на странице релизов подписан собственным
 ### Технические детали
 
 - Файл перевода: `app/src/main/res/values-ru/strings.xml`
-- Все **220 строк** переведены — ни одной пропущенной английской строки
+- Все **236 строк** переведены — ни одной пропущенной английской строки
 - Форматные плейсхолдеры (`%d`, `%s`, `%.1f`) полностью совпадают с английской версией — никаких crash'ей при переключении языка
 - Выбор языка сохраняется в `SharedPreferences` и восстанавливается после перезапуска
 - На здоровье не влияет — JSON-данные экспортируются с английскими ключами независимо от языка интерфейса
@@ -523,6 +536,7 @@ cp README.md README.fr.md
 
 | Версия | Дата | Что нового |
 |---|---|---|
+| [v1.13](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.13) | 2026-11-18 | Свой проект Google Cloud задаётся прямо в приложении (без пересборки), в UI показаны пакет и SHA-1 подписи, 457 тестов |
 | [v1.12](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.12) | 2026-11-18 | Детальные измерения за день (давление, глюкоза, сатурация, вес, жир, пульс) рядом с агрегатами, названия тренировок теперь по официальным id Health Connect, 436 тестов |
 | [v1.11](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.11) | 2026-11-18 | Выгрузка по расписанию действительно починена: разрешение Health Connect на фоновое чтение, уведомление об ошибках, без повторов на 4xx, пустые дни больше не сдвигают точку догона, 426 тестов |
 | [v1.10](https://github.com/kas-cor/healthconnect-export/releases/tag/v1.10) | 2026-09-27 | Вход в Google через Credential Manager, ленивый запрос Drive-скоупа, догон недоставленных дней при открытии приложения, 397 тестов |

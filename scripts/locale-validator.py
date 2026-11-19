@@ -83,6 +83,9 @@ def is_placeholder_only(text: str) -> bool:
     # URL
     if re.match(r'^https?://', stripped):
         return True
+    # OAuth client ID (technical identifier, must not be translated)
+    if re.match(r'^\d+-[0-9A-Za-z_-]+\.apps\.googleusercontent\.com$', stripped):
+        return True
     # Simple dash/ellipsis
     if stripped in ("—", "…", "sk-…"):
         return True

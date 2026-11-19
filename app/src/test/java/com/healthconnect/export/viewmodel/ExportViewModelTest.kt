@@ -16,6 +16,7 @@ import androidx.work.testing.WorkManagerTestInitHelper
 import com.healthconnect.export.R
 import com.healthconnect.export.auth.DriveAuthorization
 import com.healthconnect.export.auth.GoogleAccountInfo
+import com.healthconnect.export.auth.GoogleClientIdStore
 import com.healthconnect.export.testutil.FakeGoogleAuthProvider
 import com.healthconnect.export.usecase.ExportDataUseCase
 import com.healthconnect.export.usecase.ExportStep
@@ -33,6 +34,7 @@ import org.junit.Before
 import org.junit.Assert.*
 import com.healthconnect.export.data.*
 import com.healthconnect.export.repository.*
+import com.healthconnect.export.testing.FakeSharedPreferences
 import org.junit.Test
 import org.mockito.kotlin.*
 import org.junit.runner.RunWith
@@ -97,6 +99,10 @@ class ExportViewModelTest {
         whenever(mockApp.applicationContext).thenReturn(mockApp)
         whenever(mockApp.filesDir).thenReturn(tempDir)
         whenever(mockApp.getSharedPreferences(any(), any())).thenReturn(mockPrefs)
+        // The Google client ID store keeps real state so switching projects can be
+        // asserted end to end (Mockito's prefs mock stores nothing).
+        whenever(mockApp.getSharedPreferences(eq(GoogleClientIdStore.PREFS_NAME), any()))
+            .thenReturn(FakeSharedPreferences())
         whenever(mockApp.getString(any())).thenReturn("test_string")
         whenever(mockApp.getString(any(), any())).thenReturn("test_string")
         whenever(mockApp.getString(any(), any(), any())).thenReturn("test_string")
@@ -691,6 +697,81 @@ class ExportViewModelTest {
             assertEquals(0, authProvider.signInCalls)
             assertEquals(0, authProvider.authorizeCalls)
             assertTrue(viewModel.uiState.value.driveStatus is DriveStatus.NotConnected)
+        }
+    }
+
+    // =============================================
+    // Custom Google Cloud project (client ID) Tests
+    // =============================================
+
+    @Test
+    fun `init publishes the bundled client id`() {
+        assertEquals(GoogleClientIdStore.DEFAULT_CLIENT_ID, viewModel.uiState.value.googleClientId)
+        assertFalse(viewModel.uiState.value.hasCustomGoogleClientId)
+        assertFalse(viewModel.uiState.value.googleClientIdError)
+    }
+
+    @Test
+    fun `applyGoogleClientId switches the project and signs the old account out`() {
+        runTest {
+            viewModel.applyGoogleClientId("123456789012-abcdefghijklmnop.apps.googleusercontent.com")
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertTrue(state.hasCustomGoogleClientId)
+            assertFalse(state.googleClientIdError)
+            // Tokens of the previous project are useless, so the account is dropped.
+            assertTrue(state.driveStatus is DriveStatus.NotConnected)
+            verify(mockDriveRepo).clearSession()
+            assertEquals(1, authProvider.clearCredentialStateCalls)
+            assertEquals(
+                "123456789012-abcdefghijklmnop.apps.googleusercontent.com",
+                viewModel.driveManager.currentClientId(),
+            )
+        }
+    }
+
+    @Test
+    fun `applyGoogleClientId rejects a value that is not a web client id`() {
+        runTest {
+            viewModel.applyGoogleClientId("123456789012")
+
+            val state = viewModel.uiState.value
+            assertTrue(state.googleClientIdError)
+            assertFalse(state.hasCustomGoogleClientId)
+            verify(mockDriveRepo, never()).clearSession()
+            assertEquals(0, authProvider.clearCredentialStateCalls)
+        }
+    }
+
+    @Test
+    fun `applyGoogleClientId accepts a pasted client id with prefix and slash`() {
+        runTest {
+            viewModel.applyGoogleClientId(" https://123456789012-abcdefghijklmnop.apps.googleusercontent.com/ ")
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.googleClientIdError)
+            assertEquals(
+                "123456789012-abcdefghijklmnop.apps.googleusercontent.com",
+                viewModel.uiState.value.googleClientId,
+            )
+        }
+    }
+
+    @Test
+    fun `resetGoogleClientId returns to the bundled project`() {
+        runTest {
+            viewModel.applyGoogleClientId("123456789012-abcdefghijklmnop.apps.googleusercontent.com")
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            viewModel.resetGoogleClientId()
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertFalse(state.hasCustomGoogleClientId)
+            assertFalse(state.googleClientIdError)
+            assertEquals(GoogleClientIdStore.DEFAULT_CLIENT_ID, state.googleClientId)
+            assertTrue(state.driveStatus is DriveStatus.NotConnected)
         }
     }
 

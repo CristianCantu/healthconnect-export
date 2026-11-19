@@ -61,6 +61,7 @@ MainActivity (ComponentActivity)
 - **Schedule time of day**: `scheduleHour` in ExportConfig; `DailyExportWorker.schedule()` sets an initial delay until the next occurrence of that hour; `ScheduleManager.rescheduleExport()` re-creates the work silently when the hour changes.
 - **File actions**: History rows share via `FileProvider` (`xml/file_paths.xml` mirrors `getExportDirectory()` paths) and delete with a confirmation dialog; `deleteExport()` removes both JSON and CSV variants of a day.
 - **Drive state flow**: `ExportViewModel` collects `driveManager.driveState` into `uiState.driveStatus`, so the connection status is correct immediately at launch (including after an async session restore).
+- **Runtime Cloud project**: `GoogleClientIdStore` keeps the OAuth *server* (Web application) client ID in SharedPreferences and `CredentialManagerAuthProvider` reads it on every call, so the released APK can sign in against the user's own Cloud project without a rebuild (`BuildConfig.GOOGLE_CLIENT_ID` is only the default). Switching the project signs the account out — tokens belong to the previous project. The Integrations card shows `AppSignature` (package + signing SHA-1) because those are exactly the values the user has to register as an Android OAuth client.
 - **Auth split (authentication vs authorization)**: `GoogleAuthProvider` wraps Credential Manager (`GetGoogleIdOption` + `GoogleIdTokenCredential`) for sign-in and AuthorizationClient (`Identity.getAuthorizationClient`) for the Drive scope — the legacy `GoogleSignIn`/`GoogleSignInClient` API was removed in `play-services-auth` 22.0.0. `DriveManager.signIn()` only authenticates; the Drive scope is requested lazily by `syncToDrive()`, which launches the consent `IntentSender` and resumes the pending upload on `onAuthorizationResult()`.
 - **Session restore**: `DriveSessionStore` (SharedPreferences) remembers the connected email, since Credential Manager has no synchronous "last account" query. `DriveManager.refreshDriveStatus()` treats a stored email as connected and silently reuses the cached/authorized token without showing consent UI; `signOut()` clears the stored session synchronously and clears the credential state, so no silent reconnection happens afterwards.
 - **Update check**: HEAD request to the GitHub `releases/latest` URL, version parsed from the redirect `Location` header; release notes fetched from the GitHub API (`releases/latest`) for the "What's new" dialog.
@@ -91,6 +92,7 @@ healthconnect-export/
 │       │   │   └── WebhookRepository.kt        # POST with retry
 │       │   ├── util/
 │       │   │   ├── LocaleManager.kt
+│       │   │   ├── AppSignature.kt         # Package name + signing SHA-1 shown in the UI
 │       │   │   ├── BatteryOptimization.kt  # Doze-exemption state + request intent
 │       │   │   ├── DeliveryAlertNotifier.kt # Deduplicated notification for a broken delivery pipeline
 │       │   │   ├── DeliveryLog.kt          # Last attempt/success + 100-entry delivery ring buffer
@@ -98,6 +100,7 @@ healthconnect-export/
 │       │   │   └── ExportSettings.kt       # Export config read from SharedPreferences by the workers
 │       │   ├── auth/
 │       │   │   ├── GoogleAuthProvider.kt # Credential Manager sign-in + AuthorizationClient (Drive scope)
+│       │   │   ├── GoogleClientIdStore.kt # Custom OAuth client ID (own Cloud project) persistence
 │       │   │   └── DriveSessionStore.kt  # Remembers the connected Google account
 │       │   ├── viewmodel/
 │       │   │   ├── ExportViewModel.kt    # UI state orchestration
@@ -117,6 +120,7 @@ healthconnect-export/
 │       │   │       ├── DriveStatusCard.kt
 │       │   │       ├── ExportedFilesCard.kt
 │       │   │       ├── ExportSummaryCard.kt
+│       │   │       ├── GoogleClientIdCard.kt
 │       │   │       ├── JsonViewerDialog.kt
 │       │   │       ├── MaterialCard.kt
 │       │   │       ├── MaterialSection.kt
@@ -133,8 +137,8 @@ healthconnect-export/
 │       │       ├── DeliveryOutcome.kt               # Shared retry/notify decision for the delivery workers
 │       │       └── DeliveryWatchdog.kt              # Inexact Doze-allowed alarm (every 6 h) re-enqueuing both jobs
 │       ├── main/res/
-│       │   ├── values/strings.xml              # English (220 strings)
-│       │   ├── values-ru/strings.xml           # Russian (220 strings, полный перевод)
+│       │   ├── values/strings.xml              # English (236 strings)
+│       │   ├── values-ru/strings.xml           # Russian (236 strings, полный перевод)
 │       │   ├── values/themes.xml
 │       │   ├── drawable/ic_github.xml          # GitHub logo for the About card
 │       │   └── xml/health_connect_permissions.xml
@@ -147,6 +151,8 @@ healthconnect-export/
 │           │   ├── CsvMapperTest.kt
 │           │   ├── DataModelsSerializationTest.kt
 │           │   └── HumanReadableMapperTest.kt
+│           ├── auth/
+│           │   └── GoogleClientIdStoreTest.kt
 │           ├── receiver/
 │           │   ├── DeliveryBootReceiverTest.kt
 │           │   └── WatchdogAlarmReceiverTest.kt
@@ -237,14 +243,16 @@ Every2HoursWebhookWorker (every 2h)
 
 ## Unit tests
 
-**Test files (436 tests total):**
+**Test files (457 tests total):**
 
 | File | Tests | Scope |
 |---|---|---|
-| `ExportViewModelTest` | 54 | ViewModel states: export, webhook, Drive sign-in/session restore, signed-out flag, Drive scope consent, update check, export format, schedule hour, retention, file actions |
+| `ExportViewModelTest` | 59 | ViewModel states: export, webhook, Drive sign-in/session restore, signed-out flag, Drive scope consent, update check, export format, schedule hour, retention, file actions |
 | `WebhookRepositoryTest` | 42 | sendRecords via local HTTP server (success/error/auth/special chars/JSON body) + URL validation + retryability of HTTP codes |
 | `DataModelsSerializationTest` | 45 | Roundtrip serialization: DailyHealthRecord, ExportConfig (incl. format/hour), enums, SpeedData, sourceDisplayName, `hasAnyData()`, detailed readings |
 | `HealthConnectReadingsTest` | 8 | Detailed readings: ISO time with the record offset, ordering across zone offsets, 2000-per-day payload cap |
+| `GoogleClientIdStoreTest` | 11 | Custom OAuth client ID: bundled fallback, normalization, override lifecycle, validation |
+| `AppSignatureTest` | 5 | Signing SHA-1 from the package manager: formatting, missing package, missing signer |
 | `LocalExportRepositoryTest` | 31 | File operations: save (JSON/CSV), list, cleanup, delete both formats, filename format |
 | `HighlightJsonSyntaxTest` | 31 | JSON syntax highlighting: strings, numbers, booleans, null, nested objects, arrays, escaped quotes |
 | `DailyExportWorkerTest` | 32 | doWork() (success/no data/permission handling/4xx not retried/exceptions) + schedule() (daily/weekly/manual/cancel, schedule hour) |

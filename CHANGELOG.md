@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Own Google Cloud project, set inside the app (#89):** the OAuth server client ID is no longer a build-time constant. The Integrations tab has a "Google Cloud project" card: it shows the package name and the signing SHA-1 of the installed APK (with copy buttons) and takes a Web application client ID from the user's own project, so the released APK can sign in to Drive without being rebuilt — register an Android OAuth client for that package/SHA-1 pair, enable the Drive API, add yourself as a test user, paste the client ID. Switching the project signs the account of the previous project out, because its tokens are meaningless elsewhere; `Reset` goes back to the bundled project. Malformed values are rejected in place, and the bundled project is never stored as an override
+- **Tests:** `GoogleClientIdStoreTest` (default fallback, normalization, override lifecycle, validation), `AppSignatureTest` (SHA-1 formatting, missing package/signer) and ViewModel coverage for switching, rejecting and resetting the project — 436 → 457 tests
+
+---
+
 ## [1.12] — 2026-11-18
 
 ### Added
@@ -276,6 +284,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[1.13]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.13
 [1.12]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.12
 [1.11]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.11
 [1.10]: https://github.com/kas-cor/healthconnect-export/releases/tag/v1.10

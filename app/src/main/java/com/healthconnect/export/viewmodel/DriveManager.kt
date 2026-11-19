@@ -9,6 +9,7 @@ import androidx.activity.result.ActivityResult
 import com.healthconnect.export.R
 import com.healthconnect.export.auth.CredentialManagerAuthProvider
 import com.healthconnect.export.auth.DriveAuthorization
+import com.healthconnect.export.auth.GoogleClientIdStore
 import com.healthconnect.export.auth.GoogleAuthProvider
 import com.healthconnect.export.repository.GoogleDriveRepository
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +40,12 @@ class DriveManager(
     internal var scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val TAG = "DriveManager"
+
+    /**
+     * Cloud-project override: the OAuth server client ID the app signs in against.
+     * Stored separately from the account, so it survives a sign-out.
+     */
+    private val clientIdStore = GoogleClientIdStore(application)
 
     /** Underlying repository that talks to the Google Drive API. */
     val driveRepo = GoogleDriveRepository(application, authProvider)
@@ -76,6 +83,51 @@ class DriveManager(
     }
 
     private fun uiContext(): Context = activityRef.get() ?: application
+
+    // ── Cloud project (client ID) ────────────────────────────────────────────
+
+    /** Client ID in effect: the user's own project when set, else the bundled one. */
+    fun currentClientId(): String = clientIdStore.current()
+
+    /** The client ID the user entered, or null when the bundled project is used. */
+    fun customClientId(): String? = clientIdStore.custom()
+
+    /**
+     * Switches to the user's own Cloud project.
+     *
+     * Credentials issued by the previous project are meaningless afterwards, so the
+     * account is signed out and the credential session cleared: the next sign-in
+     * goes to the new project.
+     */
+    fun setCustomClientId(clientId: String) {
+        clientIdStore.save(clientId)
+        resetAccount()
+        _driveState.value =
+            DriveState(
+                status = DriveStatus.NotConnected,
+                message = str(R.string.vm_drive_client_id_saved),
+            )
+    }
+
+    /** Goes back to the bundled Cloud project, signing the current account out. */
+    fun resetCustomClientId() {
+        clientIdStore.clear()
+        resetAccount()
+        _driveState.value =
+            DriveState(
+                status = DriveStatus.NotConnected,
+                message = str(R.string.vm_drive_client_id_reset),
+            )
+    }
+
+    /** Forgets the connected account and the credential session, keeping the client ID. */
+    private fun resetAccount() {
+        driveRepo.clearSession()
+        pendingFiles = null
+        scope.launch {
+            authProvider.clearCredentialState(application)
+        }
+    }
 
     // ── Sign-in / Sign-out ───────────────────────────────────────────────────
 

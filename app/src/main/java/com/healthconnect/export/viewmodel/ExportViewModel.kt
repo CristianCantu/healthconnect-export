@@ -12,11 +12,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthconnect.export.BuildConfig
 import com.healthconnect.export.R
+import com.healthconnect.export.auth.GoogleClientIdStore
 import com.healthconnect.export.data.*
 import com.healthconnect.export.repository.HealthConnectRepository
 import com.healthconnect.export.repository.LocalExportRepository
 import com.healthconnect.export.usecase.ExportDataUseCase
 import com.healthconnect.export.usecase.ExportStep
+import com.healthconnect.export.util.AppSignature
 import com.healthconnect.export.util.BatteryOptimization
 import com.healthconnect.export.util.DeliveryLog
 import com.healthconnect.export.util.ExportSettings
@@ -74,6 +76,14 @@ data class ExportUiState(
     val lastDeliveryAttemptResult: String? = null,
     val lastDeliverySuccessAt: Long? = null,
     val batteryOptimizationIgnored: Boolean = true,
+    /** OAuth client ID in effect (bundled project or the user's own). */
+    val googleClientId: String = "",
+    /** True when [googleClientId] comes from the user's own Cloud project. */
+    val hasCustomGoogleClientId: Boolean = false,
+    /** True when the last edit of the client ID field was rejected. */
+    val googleClientIdError: Boolean = false,
+    /** Package name and signing SHA-1 the OAuth client has to be registered with. */
+    val appSignatureSha1: String? = null,
 )
 
 sealed class DriveStatus {
@@ -167,6 +177,7 @@ class ExportViewModel(
         loadScheduleHour()
         loadRetentionDays()
         loadFrequency()
+        loadGoogleClientId()
         refreshDeliveryStatus()
         // A stale delivery pipeline must not wait for the next watchdog alarm:
         // the user is here now, so fill the gap right away.
@@ -398,6 +409,61 @@ class ExportViewModel(
      */
     fun signInToDrive() {
         driveManager.signIn()
+    }
+
+    /**
+     * Publishes the Cloud project setting to the UI: the client ID in effect, the
+     * package/SHA-1 an OAuth client has to be registered with, and whether the
+     * bundled project is overridden.
+     */
+    private fun loadGoogleClientId() {
+        _uiState.update {
+            it.copy(
+                googleClientId = driveManager.currentClientId(),
+                hasCustomGoogleClientId = driveManager.customClientId() != null,
+                appSignatureSha1 = AppSignature.sha1(getApplication()),
+            )
+        }
+    }
+
+    /**
+     * Switches Google sign-in to the user's own Cloud project.
+     *
+     * [clientId] is the *Web application* client ID from their project; the account
+     * connected to the bundled project is signed out, because its tokens belong to
+     * another project.
+     */
+    fun applyGoogleClientId(clientId: String) {
+        if (!GoogleClientIdStore.isValid(clientId)) {
+            _uiState.update { it.copy(googleClientIdError = true) }
+            return
+        }
+        driveManager.setCustomClientId(clientId)
+        val driveState = driveManager.driveState.value
+        _uiState.update {
+            it.copy(
+                googleClientId = driveManager.currentClientId(),
+                hasCustomGoogleClientId = true,
+                googleClientIdError = false,
+                driveStatus = driveState.status,
+                message = driveState.message,
+            )
+        }
+    }
+
+    /** Drops the custom client ID and goes back to the bundled Cloud project. */
+    fun resetGoogleClientId() {
+        driveManager.resetCustomClientId()
+        val driveState = driveManager.driveState.value
+        _uiState.update {
+            it.copy(
+                googleClientId = driveManager.currentClientId(),
+                hasCustomGoogleClientId = false,
+                googleClientIdError = false,
+                driveStatus = driveState.status,
+                message = driveState.message,
+            )
+        }
     }
 
     /**

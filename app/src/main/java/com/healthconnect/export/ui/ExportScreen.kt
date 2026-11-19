@@ -78,6 +78,7 @@ import com.healthconnect.export.ui.components.DataSourceCard
 import com.healthconnect.export.ui.components.DataTypeCard
 import com.healthconnect.export.ui.components.DateRangeCard
 import com.healthconnect.export.ui.components.DriveStatusCard
+import com.healthconnect.export.ui.components.GoogleClientIdCard
 import com.healthconnect.export.ui.components.ExportSummaryCard
 import com.healthconnect.export.ui.components.ExportedFilesCard
 import com.healthconnect.export.ui.components.JsonViewerDialog
@@ -497,6 +498,16 @@ private fun IntegrationsContent(
                 onSync = viewModel::syncToDrive,
                 onSignInClick = onSignInClick,
                 onSignOutClick = viewModel::signOut,
+            )
+        }
+        item {
+            GoogleClientIdCard(
+                clientId = uiState.googleClientId,
+                hasCustomClientId = uiState.hasCustomGoogleClientId,
+                hasError = uiState.googleClientIdError,
+                signingSha1 = uiState.appSignatureSha1,
+                onSave = viewModel::applyGoogleClientId,
+                onReset = viewModel::resetGoogleClientId,
             )
         }
         item {

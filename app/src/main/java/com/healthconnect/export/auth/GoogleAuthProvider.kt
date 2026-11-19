@@ -17,7 +17,6 @@ import com.google.android.gms.tasks.Task
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.api.services.drive.DriveScopes
-import com.healthconnect.export.BuildConfig
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -89,6 +88,12 @@ interface GoogleAuthProvider {
  */
 class CredentialManagerAuthProvider(
     private val context: Context,
+    /**
+     * The server (Web application) client ID in effect. Read on every call so a
+     * client ID entered in the app — see [GoogleClientIdStore] — takes effect
+     * without restarting.
+     */
+    private val clientId: () -> String = { GoogleClientIdStore(context).current() },
 ) : GoogleAuthProvider {
     companion object {
         private const val TAG = "GoogleAuthProvider"
@@ -112,7 +117,7 @@ class CredentialManagerAuthProvider(
         val option =
             GetGoogleIdOption
                 .Builder()
-                .setServerClientId(BuildConfig.GOOGLE_CLIENT_ID)
+                .setServerClientId(clientId())
                 .setFilterByAuthorizedAccounts(autoSelect)
                 .setAutoSelectEnabled(autoSelect)
                 .build()
@@ -144,6 +149,11 @@ class CredentialManagerAuthProvider(
             null
         } catch (e: GetCredentialException) {
             Log.w(TAG, "signIn: credential request failed", e)
+            Log.w(
+                TAG,
+                "signIn: if this is [28444] \"Developer console is not set up correctly\", the OAuth client " +
+                    "in the Cloud project ${clientId()} has no Android client for this package/SHA-1 pair",
+            )
             null
         }
     }
